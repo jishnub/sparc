@@ -1,0 +1,104 @@
+!
+! Here are a number of examples that could be cut and pasted
+! into the code (with appropriate alterations, of course)
+
+! 1. Multiple source picture: source suppression
+! This is for a 400 X 400 Mm^2 cube; the width of the source
+! suppressed region is a little more than 8 Mm
+!
+! Place an appropriately altered version of this code in driver.f90 - look for the
+! comment "SOURCE STRENGTH PERTURBATIONS HERE" in the file and paste
+! this in that section.
+
+   do j=1,dim2(rank)
+    do i=1,nx
+     tempxy=(((x(i)-0.5)*400)**2.0+((y(j+ystart(rank)-1)-0.5)*400)**2.0)**0.5
+     vr(i,j,:)=vr(i,j,:)/(1.0+exp((8.0-tempxy)*1.5))
+    enddo
+   
+
+! 2. Sound-speed perturbations
+! Again, this is merely an example - changes are probably necessary
+! Paste a suitable version of this in "driver.f90" in the section
+! c2 is sound-speed squared
+! titled SOUND-SPEED PERTURBATIONS HERE
+! 200 X 200 Mm^2 box, with a sound-speed perturbation 
+! z_cent - location along the vertical axis
+! z_spread - size of the perturbation in the z-direction
+! x_spread - horizontal size of the perturbation
+! 0.2 - 20% increase in sound speed squared
+! Note if you used the altered solar model of Hanasoge et al.,
+! sound-speed perturbations will add an instability to the system
+!
+  do k=1,nz
+   do j=1,dim2(rank)
+    do i=1,nx
+     tempxy = (((x(i)-0.5)*200.0)**2.0 + ((y(j+ystart(rank)-1) - 0.5)*200.)**2.0) 
+     c2(i,j,k) = c2(i,j,k)*(1.0 + 0.2*exp(-( ( (1.0 -z(k))*Rsun*10.0**(-8.0) - z_cent)/z_spread)**2.0 - tempxy/x_spread**2.0) )
+    enddo
+   enddo
+  enddo
+!
+!
+! 3. Non-multiple source picture: an exploding source
+! This is a bit more complicated. The forcing term is introduced in
+! the MP_ subroutines, i.e. in the physics.f90 file. There are three
+! MP_ bits, one for quiet calculations: MP_QUIET, one for the MHD: MP_MHD,
+! and one for flows, MP_FLOWS. Depending on the calculation of choice, 
+! look in the subroutine for the part that says:
+!
+ RHSv_z(:,:,k) =.....+ forcing * source_dep(k) 
+
+! This is where the wave forcing terms are introduced into the differential
+! equations. One way to produce a source explosion is the following:
+
+do k=1,nz
+ do j=1,dim2(rank)
+  do i=1,nx
+   RHSv_z(i,j,k) = RHSv_z + 10.0**(-6.0) * exp(-time*timestep/(300.0) *log(2.0)) * &
+		   exp(-(x(i)-0.2)**2.0/0.001 - (y(j+ystart(rank)-1) -0.5)**2.0/0.001) 
+  enddo
+ enddo
+enddo
+
+! The term "time" is an index that keeps track of the timestep of the simulation. Essentially,
+! the first exponential term on the RHS controls the time dependence of the source - it has
+! a half-life of 300 seconds. Note that you can introduce arbitrary time oscillators as well.
+! The next two terms control the spatial location of the explosion,
+! the source exploding at the non-dimensionalized (x,y) coordinates of (0.2,0.5). The size
+! and magnitude of the source are also determined here. Here's another example - this time
+! with a wave packet-like source that propagates along the x-direction.
+
+do k=1,nz
+ do j=1,dim2(rank)
+  do i=1,nx
+   RHSv_z(i,j,k) = RHSv_z + 10.0**(-6.0) * exp(-time*timestep/(300.0) *log(2.0)) * &
+		   exp(-(x(i)-0.2)**2.0/0.001) 
+  enddo
+ enddo
+enddo
+
+! Lastly, if you want to implement an initial condition, say a pulse in pressure, here's
+! an example that explains how to do it. In driver.f90, look for the "OTHER INITIAL CONDITIONS HERE".
+! Place code of the following sort below:
+
+do k=1,nz
+ do j=1,dim2(rank)
+  do i=1,nx
+   a(i,j,k,5) = 10.0**(-6.0) * exp(-(x(i)-0.2)**2.0/0.001) 
+  enddo
+ enddo
+enddo
+
+! This introduces a wall-like pressure pulse, constant along all y,z. Now to introduce a
+! vertically limited wave packet oriented to propagate in the x-z plane:
+
+do k=1,nz
+ do j=1,dim2(rank)
+  do i=1,nx
+   a(i,j,k,5) = 10.0**(-6.0) * exp(-(x(i)-0.2)**2.0/0.001 - (z(k)-0.9997)**2.0/0.000001) 
+  enddo
+ enddo
+enddo
+
+
