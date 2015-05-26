@@ -366,8 +366,10 @@ PROGRAM CONJGRAD
   update_c = update_c/con 
   update_psi = update_psi/con 
   
-  eps = 1e-2
-
+  !eps = 1.5e-2
+  !eps = 3e-3
+  ! eps = 5e-3
+   eps=1.5e-2
   open(7,file = file_data,form = 'formatted',status = 'old')
   do k = 1,nz
     read(7,*) data(k,:)

@@ -148,9 +148,9 @@ Program driver
       v0_z = 0.0
   endif
 
-    inquire(file=directory//'model_c.fits', exist = iteration)
+    inquire(file=directory//'model_c_'//jobno//'.fits', exist = iteration)
     if (iteration) then
-      call readfits(directory//'model_c.fits',c2,nz)
+      call readfits(directory//'model_c_'//jobno//'.fits',c2,nz)
       c2 = (c2/dimc)**2
     endif
 
@@ -297,67 +297,70 @@ Program driver
 
   if (kernel_mode) then
     call DETERMINE_STATUS(init, maxtime)
-    if (rank==0) call system('rm Instruction')
+    if (rank==0) call system('rm Instruction_'//contrib//'_'//jobno)
+    !if (rank==0) call system('rm Instruction')
 
     if (compute_forward) then
+        indexglob = 0
+        if (rank == 0) then 
+            open(19,file=directory//'forward_src'//contrib//'_ls'//jobno//'/rms_hist'&
+                    ,status='replace',form='formatted',position='append') 
+            open(745, file=directory//'forward_src'//contrib//'_ls'//jobno//'/kernel_info'&
+                    ,status='unknown', action='write')
+            write(745,*) init
+            write(745,*) maxtime
+            close(745)
+        endif
 
-    indexglob = 0
-    if (rank == 0) then 
-      open(19,file=directory//'forward'//contrib//'/rms_hist',status='replace',form='formatted',position='append') 
-      open(745, file=directory//'forward'//contrib//'/kernel_info',status='unknown', action='write')
-      write(745,*) init
-      write(745,*) maxtime
-      close(745)
-    endif
+        delta_width = 2.0d0/(z(e_rad+1) - z(e_rad-1))
 
-    delta_width = 2.0d0/(z(e_rad+1) - z(e_rad-1))
+        if (magnetic) then
+          do k=1,dim2(rank)
+            do j=1,nx  
+              delta_width_2d(j,k) = 2.0d0/(z(erad_2d(j,k)+1) - z(erad_2d(j,k)-1))
+            enddo
+          enddo
+        endif
+!~         print *,norm(rho0), norm(c2), norm(box), norm(boz), delta_width, o_rad,e_rad,contrib
+!~         stop
 
-    if (magnetic) then
-      do k=1,dim2(rank)
-        do j=1,nx  
-          delta_width_2d(j,k) = 2.0d0/(z(erad_2d(j,k)+1) - z(erad_2d(j,k)-1))
-        enddo
-      enddo
-    endif
+        call timestepping(init)
 
-    call timestepping(init)
+        if (rank==0) then 
+          close(28)
+          close(1244)
+        endif
 
-    if (rank==0) then 
-      close(28)
-      close(1244)
-    endif
+        call read_binary_writefits(directory//'forward_src'//contrib//'_ls'//jobno//'/vz_cc.bin',&
+          indexglob, directory//'forward_src'//contrib//'_ls'//jobno//'/vz_cc.fits')
 
-    call read_binary_writefits(directory//'forward'//contrib//'/vz_cc.bin',&
-      indexglob, directory//'forward'//contrib//'/vz_cc.fits')
-
-  !  call adjoint_source_comp(indexglob)
-    if (.not. (compute_synth .or. compute_data)) call adjoint_source_filt(indexglob)
-      call misfit_all(indexglob)
+      !  call adjoint_source_comp(indexglob)
+        if (.not. compute_data) then
+            call adjoint_source_filt(indexglob)
+            call misfit_all(indexglob)
+        endif
     endif
 
     if (compute_adjoint) then
+        if (rank == 0) then
+            open(19,file=directory//'adjoint_src'//contrib//'/rms_hist',status='replace',form='formatted',position='append') 
+            open(745, file=directory//'adjoint_src'//contrib//'/kernel_info',status='unknown', action='write')
+            write(745,*) floor(maxtime/cadforcing_step*1.) + 1
+        endif
 
-      if (rank == 0) then 
-        open(19,file=directory//'adjoint'//contrib//'/rms_hist',status='replace',form='formatted',position='append') 
-        open(745, file=directory//'adjoint'//contrib//'/kernel_info',status='unknown', action='write')
-        write(745,*) floor(maxtime/cadforcing_step*1.) + 1
-      endif
+        call timestepping(init)
 
-      call timestepping(init)
+        if (rank==0) then 
+            write(745,*) floor(time/cadforcing_step*1.)*cadforcing_step
+            close(745)
+            close(28)
+            close(1244)
+        endif
 
-      if (rank==0) then 
-        write(745,*) floor(time/cadforcing_step*1.)*cadforcing_step
-        close(745)
-        close(28)
-        close(1244)
-
-      endif
-
-
-      open(44,file=directory//'adjoint'//contrib//'/kernel_info',form='formatted',status='unknown')
-      read(44,*) init!nt_kern
-      read(44,*) maxtime
-      close(44)
+        open(44,file=directory//'adjoint_src'//contrib//'/kernel_info',form='formatted',status='unknown')
+        read(44,*) init!nt_kern
+        read(44,*) maxtime
+        close(44)
     endif
 
 
@@ -476,10 +479,10 @@ SUBROUTINE TIMESTEPPING(init)
 
        if (compute_forward) then
          if (.not. (COMPUTE_SYNTH .OR. LINESEARCH .OR. COMPUTE_DATA)) &
-        call write_out_partial_state(directory//'forward'//contrib//'/')
+        call write_out_partial_state(directory//'forward_src'//contrib//'_ls'//jobno//'/')
 	 !call write_out_slice(directory//'forward'//contrib//'/')
        endif
-       if (compute_adjoint) call write_out_partial_state(directory//'adjoint'//contrib//'/') 
+       if (compute_adjoint) call write_out_partial_state(directory//'adjoint_src'//contrib//'/') 
 
    endif
 
@@ -489,10 +492,10 @@ SUBROUTINE TIMESTEPPING(init)
      if (.not. kernel_mode) call write_out_full_state(directory) 
      if (kernel_mode) then
 
-       if (rank==0) open(99, file=directory//'unfinished_calc_'//contrib,action='write', status='replace')
+       if (rank==0) open(99, file=directory//'unfinished_calc_'//contrib//'_'//jobno,action='write', status='replace')
 
        if (compute_adjoint) then
-          call write_out_full_state(directory//'adjoint'//contrib//'/') 
+          call write_out_full_state(directory//'adjoint_src'//contrib//'/') 
 
           if (rank==0) then 
             if (.not. generate_wavefield) write(99,"(A)") 'adjoint'
@@ -504,7 +507,7 @@ SUBROUTINE TIMESTEPPING(init)
           endif
                  
        else
-          call write_out_full_state(directory//'forward'//contrib//'/')
+          call write_out_full_state(directory//'forward_src'//contrib//'_ls'//jobno//'/')
           if (rank==0) then 
             write(99,"(A)") 'forward'
             write(99,*) time
@@ -526,16 +529,16 @@ SUBROUTINE TIMESTEPPING(init)
 
  if (rank==0) then
 
-  call system('rm '//directory//'unfinished_calc_'//contrib)
+  call system('rm '//directory//'unfinished_calc_'//contrib//'_'//jobno)
 
   if (compute_forward) then
-   open(223, file=directory//'status/'//'forward'//contrib,status='unknown')
+   open(223, file=directory//'status/'//'forward_src'//contrib//'_ls'//jobno,status='unknown')
    close(223)
    !call system('rm -rf '//directory//'forward'//contrib//'/*full*')
   endif
 
   if (compute_adjoint) then
-   open(223, file=directory//'status/'//'adjoint'//contrib,status='unknown')
+   open(223, file=directory//'status/'//'adjoint_src'//contrib,status='unknown')
    close(223)
    !call system('rm -rf '//directory//'adjoint'//contrib//'/*full*')
   endif
@@ -575,7 +578,7 @@ SUBROUTINE DETERMINE_STATUS(init, nsteps_given)
     COMPUTE_ADJOINT = .FALSE.
     COMPUTE_FORWARD = .TRUE.
     generate_wavefield = .true.
-    keyword = 'forward'
+    keyword = 'forward_'
   endif
 
   if (compute_adjoint) then
@@ -610,6 +613,7 @@ SUBROUTINE DETERMINE_STATUS(init, nsteps_given)
       if (indexnum .ne. i) read(356,*) 
       if (indexnum .eq. i) read(356,*) xloc
      enddo
+!~       print *,"x_location",xloc
      close(356)
 
     dx = (x(2) - x(1)) * xlength*10.**(-8)
@@ -627,11 +631,11 @@ SUBROUTINE DETERMINE_STATUS(init, nsteps_given)
 !    maxtime = floor((abs(timeline))*2./timestep) 
 !    nsteps_given = floor(maxtime/cadforcing_step*1.) + 1
 
-    if (rank==0) open(28, file=directory//'forward'//contrib//'/timeline',&
+    if (rank==0) open(28, file=directory//'forward_src'//contrib//'_ls'//jobno//'/timeline',&
 		status='replace', action='write',position='append')
 
 
-    open(1244,file=directory//'forward'//contrib//'/vz_cc.bin',&
+    open(1244,file=directory//'forward_src'//contrib//'_ls'//jobno//'/vz_cc.bin',&
         form='unformatted',status='replace', action ='write',&
 	access='direct',recl=reclmax)!recordtype='fixed',
 
@@ -658,15 +662,28 @@ SUBROUTINE DETERMINE_STATUS(init, nsteps_given)
     vr = 0.0 
 
     if (rank==0) print *,'Need a file of: ', forcing_length, ' temporal slices.'
-    call readfits(directory//keyword//contrib//'/source.fits',& !'_'//contrib//
-	vr(:,:,1:forcing_length),forcing_length)
-
+    call readfits(directory//'adjoint_src'//contrib//'/source.fits',& !'_'//contrib//
+        vr(:,:,1:forcing_length),forcing_length)
  
-    if (rank==0 .and. (init .gt. 1)) open(28, file=directory//keyword//contrib//'/timeline',&
-		status='old', action='write', position='append')
+    if (rank==0 .and. (init .gt. 1)) then 
+    if (keyword=='forward_') then
+        open(28, file=directory//'forward_src'//contrib//'_ls'//jobno//'/timeline',&
+            status='old', action='write', position='append')
+    elseif (keyword=='adjoint') then
+        open(28, file=directory//'adjoint_src'//contrib//'/timeline',&
+            status='old', action='write', position='append')
+    endif
+    endif
 
-    if (rank==0 .and. (init .eq. 1)) open(28, file=directory//keyword//contrib//'/timeline',&
-		status='replace', action='write', position='rewind')
+    if (rank==0 .and. (init .eq. 1)) then
+    if (keyword=='forward_') then
+        open(28, file=directory//'forward_src'//contrib//'_ls'//jobno//'/timeline',&
+            status='replace', action='write', position='rewind')
+    elseif (keyword=='adjoint') then
+        open(28, file=directory//'adjoint_src'//contrib//'/timeline',&
+            status='replace', action='write', position='rewind')
+    endif
+    endif
 
     delta_width = 2.0d0/(z(o_rad+1) - z(o_rad-1))
 
@@ -740,7 +757,7 @@ SUBROUTINE ADJOINT_SOURCE_COMP(nt)
 
  distances = abs((x-0.5)*xlength*10.0**(-8.) - x00)
 
- open(44,file=directory//'forward'//contrib//'/timeline',action='read')
+ open(44,file=directory//'forward_src'//contrib//'_ls'//jobno//'/timeline',action='read')
  do i=1,nt
   read(44,*) loc, t(nt-i+1)
  enddo
@@ -760,7 +777,7 @@ SUBROUTINE ADJOINT_SOURCE_COMP(nt)
  call dfftw_plan_dft_c2r_3d(invplandata, nx, dim2(rank), nt, filtdat, dat, FFTW_ESTIMATE)
 
 
- call readfits(directory//'forward'//contrib//'/vz_cc.fits', acc, nt)
+ call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/vz_cc.fits', acc, nt)
  call readfits(directory//'data/'//contrib//'.fits', dat, nt)
 
  call dfftw_execute(fwdplantemp)
@@ -864,11 +881,11 @@ SUBROUTINE ADJOINT_SOURCE_COMP(nt)
   endif
  enddo
  adj = adj * nx
- inquire(file=directory//'adjoint'//contrib, exist=lexist)
+ inquire(file=directory//'adjoint_src'//contrib, exist=lexist)
  if (.not. lexist .and. (rank==0)) &
-	call system('mkdir '//directory//'adjoint'//contrib)
+	call system('mkdir '//directory//'adjoint_src'//contrib)
 
- call writefits_3d(directory//'adjoint'//contrib//'/source.fits',adj,nt)
+ call writefits_3d(directory//'adjoint_src'//contrib//'/source.fits',adj,nt)
 
  call MPI_REDUCE(misfit, misfit_tot, 1, MPI_DOUBLE_PRECISION, &
 				MPI_SUM, 0, MPI_COMM_WORLD, ierr)
@@ -879,22 +896,17 @@ SUBROUTINE ADJOINT_SOURCE_COMP(nt)
 ! misfit_tot = misfit_tot * 0.5
 ! print *,'Total',misfit_tot, misfit_tot/nmeasurements
  if (rank==0) then
-   open(34, file=directory//'adjoint'//contrib//'/information', &
+   open(34, file=directory//'adjoint_src'//contrib//'/information', &
 		action='write', position='rewind', status='replace')
    write(34,*) nt
    write(34,*) t(1)*60.
    write(34,*) t(nt)*60.
    if (test_in_2d) write(34,*) '2D'
    close(34)
-   
-   inquire(file=directory//'kernel/misfit',exist=lexist)
-   if (.not. lexist) &
-   open(88, file=directory//'kernel/misfit', status='unknown',&
-		action='write')
 
-   if (lexist) &
-   open(88, file=directory//'kernel/misfit', status='old',&
-		action='write', position='append')
+    open(88, file=directory//'kernel/misfit_'//contrib//'_'//jobno, status='unknown',&
+               action='write')
+  
 
    misfit_tot = misfit_tot * 0.5
    write(88,*) indexnum, nmeas, misfit_tot
@@ -1258,7 +1270,7 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
  use all_modules
  use bspline
  implicit none
- integer *8 fwdplantemp, invplantemp, invplantemp2, fwdquiet, invquiet
+ integer *8 fwdplantemp, invplantemp, invplantemp2!, fwdquiet, invquiet
  integer*8  invplantemp3, fwdplandata, invplandata, onedplan
  logical lexist, lexist0, lexist1
  integer i, nt, indexnum, pord, timesmax, halftime, bounce,timefin, idiff
@@ -1270,8 +1282,8 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
                                       highpmode
  real*8 pcoef(5,4), adj(nx,dim2(rank),nt), windows(nt), filt(nt),dt,xdim(nx), vel(0:1)
  real*8 freqnu(nt), leftcorner, rightcorner, dnu, con, misfit,misfit_tot
- complex*16, dimension(nx,dim2(rank),nt) :: filtout, tempout, tempdat, filtquiet, tempquiet, &
-                                 filtdat, filtex, filtemp,dat,acc,ccdot, quiet, quietfilt 
+ complex*16, dimension(nx,dim2(rank),nt) :: filtout, tempout, tempdat,& !, filtquiet, tempquiet, &
+                                 filtdat, filtex, filtemp,dat,acc,ccdot!, quiet, quietfilt 
  complex*16, dimension(nx) :: eyekh
  complex*16, dimension(nt) :: oned, ccdotone
  complex*16 UNKNOWN
@@ -1304,7 +1316,7 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
  idiff = floor(x00/((x(2)-x(1))*xlength*10.0**(-8.)))
 ! print *,idiff
 
- open(44,file=directory//'forward'//contrib//'/timeline',action='read')
+ open(44,file=directory//'forward_src'//contrib//'_ls'//jobno//'/timeline',action='read')
  do i=1,nt
   read(44,*) loc, t(nt-i+1)
  enddo
@@ -1313,17 +1325,17 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
  dt = t(2)-t(1)
 
  if (rank==0 .and. (.not. linesearch)) then
-   open(596,file=directory//'forward'//contrib//'/windows.0',action='write',status='replace')
-   open(597,file=directory//'forward'//contrib//'/windows.1',action='write',status='replace')
+   open(596,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.0',action='write',status='replace')
+   open(597,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.1',action='write',status='replace')
  elseif(rank==0 .and. linesearch) then
 
-   inquire(file=directory//'forward'//contrib//'/windows.0',exist=lexist0)
+   inquire(file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.0',exist=lexist0)
    if (lexist0) &
-    open(596,file=directory//'forward'//contrib//'/windows.0',action='read',status='old')
+    open(596,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.0',action='read',status='old')
 
-   inquire(file=directory//'forward'//contrib//'/windows.1',exist=lexist1)
+   inquire(file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.1',exist=lexist1)
    if (lexist1) &
-    open(597,file=directory//'forward'//contrib//'/windows.1',action='read',status='old')
+    open(597,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.1',action='read',status='old')
  endif
 
  adj = 0.0
@@ -1335,11 +1347,11 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
  
  call dfftw_plan_dft_3d(fwdplantemp, nx, dim2(rank), nt, acc, filtout, -1, FFTW_ESTIMATE)
  call dfftw_plan_dft_3d(fwdplantemp, nx, dim2(rank), nt, acc, filtout, -1, FFTW_ESTIMATE)
- call dfftw_plan_dft_3d(fwdquiet, nx, dim2(rank), nt, quiet, filtquiet, -1, FFTW_ESTIMATE)
+! call dfftw_plan_dft_3d(fwdquiet, nx, dim2(rank), nt, quiet, filtquiet, -1, FFTW_ESTIMATE)
  call dfftw_plan_dft_3d(invplantemp, nx, dim2(rank), nt, filtout, acc, 1, FFTW_ESTIMATE)
  call dfftw_plan_dft_3d(invplantemp2, nx, dim2(rank), nt, filtout, ccdot, 1, FFTW_ESTIMATE)
  call dfftw_plan_dft_3d(invplantemp3, nx, dim2(rank), nt, filtemp, filtex, 1, FFTW_ESTIMATE)
- call dfftw_plan_dft_3d(invquiet, nx, dim2(rank), nt, tempquiet, quietfilt, 1, FFTW_ESTIMATE)
+! call dfftw_plan_dft_3d(invquiet, nx, dim2(rank), nt, tempquiet, quietfilt, 1, FFTW_ESTIMATE)
 
  call dfftw_plan_dft_3d(fwdplandata, nx, dim2(rank), nt, dat, filtdat, -1, FFTW_ESTIMATE)
  call dfftw_plan_dft_3d(invplandata, nx, dim2(rank), nt, filtdat, dat, 1, FFTW_ESTIMATE)
@@ -1347,7 +1359,7 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
  call dfftw_plan_dft_1d(onedplan, nt, oned, ccdotone, -1, FFTW_ESTIMATE)
 
 
- call readfits(directory//'forward'//contrib//'/vz_cc.fits', temparr, nt)
+ call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/vz_cc.fits', temparr, nt)
 ! call readfits(directory//'best_inversion/tt/00/03.fits', temparr, nt)
  acc = cmplx(temparr)
 ! dat = 0.0
@@ -1356,13 +1368,13 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
 ! call readfits(directory//'best_inversion/tt/data.0/03.fits', temparr, nt)
  dat = cmplx(temparr)
 
- call readfits(directory//'quiet.fits', temparr, nt)
+! call readfits(directory//'quiet.fits', temparr, nt)
 ! call readfits(directory//'best_inversion/tt/data.0/03.fits', temparr, nt)
- quiet = cmplx(temparr)
+! quiet = cmplx(temparr)
 
  call dfftw_execute(fwdplantemp)
  call dfftw_execute(fwdplandata)
- call dfftw_execute(fwdquiet)
+! call dfftw_execute(fwdquiet)
 
 
  filt = 1.0
@@ -1423,7 +1435,7 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
     open(97, file = directory//'params.'//ord, action = 'read', status='old')
 ! call readfits(directory//'forward'//contrib//'/vz_cc.fits', temparr, nt)
 
-    open(238, file = directory//'forward'//contrib//'/ttdiff.'//ord, action = 'write', status='replace')
+    open(238, file = directory//'forward_src'//contrib//'_ls'//jobno//'/ttdiff.'//ord, action = 'write')
 
     read(97,*) mindist
     read(97,*) maxdist
@@ -1438,11 +1450,11 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
 
      filtout = tempout * cmplx(filter)
      filtdat = tempdat * cmplx(filter)
-     tempquiet = filtquiet * cmplx(filter)
+  !   tempquiet = filtquiet * cmplx(filter)
 
      call dfftw_execute(invplantemp)
      call dfftw_execute(invplandata)
-     call dfftw_execute(invquiet)
+  !   call dfftw_execute(invquiet)
 
 !  call writefits_3d('predict.fits',real(acc),nt)
 !  call writefits_3d('qfilt.fits',real(quietfilt),nt)
@@ -1621,12 +1633,12 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
 
  adj = adj *nt / 60. 
 
- if (.not. linesearch) then
-  inquire(file=directory//'adjoint'//contrib, exist=lexist)
+ if (.not. (linesearch .or. compute_synth)) then
+  inquire(file=directory//'adjoint_src'//contrib, exist=lexist)
   if (.not. lexist .and. (rank==0)) &
-	call system('mkdir '//directory//'adjoint'//contrib)
+	call system('mkdir '//directory//'adjoint_src'//contrib)
 
-  call writefits_3d(directory//'adjoint'//contrib//'/source.fits',adj,nt)
+  call writefits_3d(directory//'adjoint_src'//contrib//'/source.fits',adj,nt)
  endif
 ! print *,'here'
  call MPI_REDUCE(misfit, misfit_tot, 1, MPI_DOUBLE_PRECISION, &
@@ -1639,7 +1651,7 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
 ! print *,'Total',misfit_tot, misfit_tot/nmeasurements
  if (rank==0) then
   if (.not. linesearch) then
-   open(34, file=directory//'adjoint'//contrib//'/information', &
+   open(34, file=directory//'adjoint_src'//contrib//'/information', &
 		action='write', position='rewind', status='replace')
    write(34,*) nt
    write(34,*) t(1)*60.
@@ -1648,14 +1660,14 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
    close(34)
   endif  
  
-   inquire(file=directory//'kernel/misfit',exist=lexist)
-   if (.not. lexist) &
-   open(88, file=directory//'kernel/misfit', status='unknown',&
+!   inquire(file=directory//'kernel/misfit'//contrib,exist=lexist)
+!   if (.not. lexist) &
+   if (rank==0) open(88, file=directory//'kernel/misfit_'//contrib//'_'//jobno, status='unknown',&
 		action='write')
 
-   if (lexist) &
-   open(88, file=directory//'kernel/misfit', status='old',&
-		action='write', position='append')
+!   if (lexist) &
+  ! open(88, file=directory//'kernel/misfit'//contrib, status='old',&
+!		action='write', position='append')
 
    misfit_tot = misfit_tot * 0.5
    write(88,*) indexnum, nmeas, misfit_tot
@@ -1737,7 +1749,7 @@ SUBROUTINE MISFIT_ALL(nt)
 
  distances = abs((x-0.5)*xlength*10.0**(-8.) - x00)
 
- open(44,file=directory//'forward'//contrib//'/timeline',action='read')
+ open(44,file=directory//'forward_src'//contrib//'_ls'//jobno//'/timeline',action='read')
  do i=1,nt
   read(44,*) loc, t(nt-i+1)
  enddo
@@ -1766,7 +1778,7 @@ SUBROUTINE MISFIT_ALL(nt)
   
 
 
- call readfits(directory//'forward'//contrib//'/vz_cc.fits', temparr, nt)
+ call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/vz_cc.fits', temparr, nt)
  acc = temparr
 
  call readfits(directory//'data/'//contrib//'.fits', temparr, nt)
@@ -1780,17 +1792,17 @@ SUBROUTINE MISFIT_ALL(nt)
 ! call writefits_3d('vz_unfiltered.fits',real(acc),nt)
 !  call writefits_3d('vz_unfiltered_dat.fits',real(dat),nt)
 
- if (rank==0) then
-  inquire(file=directory//'kernel/misfit_all',exist=lexist)
-  if (lexist) then
-   open(543,file=directory//'kernel/misfit_all',status='old',&
+ !if (rank==0) then
+ ! inquire(file=directory//'kernel/misfit_all',exist=lexist)
+ ! if (lexist) then
+   if (rank==0) open(543,file=directory//'kernel/misfit_all_'//contrib//'_'//jobno,status='unknown',&
                     position='append',action='write')
-  else
+ ! else
 
-   open(543,file=directory//'kernel/misfit_all',status='unknown',&
-                    position='rewind',action='write')
-  endif
- endif
+ !  open(543,file=directory//'kernel/misfit_all',status='unknown',&
+ !                   position='rewind',action='write')
+!  endif
+! endif
 
   tempout = filtout
   tempdat = filtdat
@@ -1802,14 +1814,14 @@ SUBROUTINE MISFIT_ALL(nt)
 
    do i=0,5
     call convert_to_string(i, ord, 1)
-    open(980+i,file=directory//'forward'//contrib//'/windows.all.'//ord,action='write',status='replace')
+    open(980+i,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.all.'//ord,action='write',status='replace')
    enddo
 
  elseif(rank==0 .and. linesearch) then
 
    do i=0,5
     call convert_to_string(i, ord, 1)
-    open(980+i,file=directory//'forward'//contrib//'/windows.all.'//ord,action='read',status='old')
+    open(980+i,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.all.'//ord,action='read',status='old')
    enddo
 
  endif

@@ -37,7 +37,7 @@ character (LEN = *), PARAMETER :: file_data = 'polytrope'
 logical :: STABILIZE_MODEL = .false.
 
 ! DIRECTORY FOR OUTPUT/ SAVED RESTART STATE (ASSUMING THEY ARE THE SAME)
-character (LEN = *), PARAMETER :: directory = '/home/jishnu/project/magnetic_inversions/working3/data/'
+character (LEN = *), PARAMETER :: directory = '/scratch/jishnu/magnetic/data/'
 
 ! THE FORCING FUNCTION
 character (LEN = *), PARAMETER :: forcingfunc = '/nobackup/shanasog/classic4/ccsource.fits'
@@ -89,8 +89,8 @@ parameter (npmlhor = 9)
 
 ! ENTER THE LOCATION OF THE 3D pressure, density, and magnetic background files
 ! DEFAULT LOCATION IS THE SAME AS OUTPUT DIRECTORY
-character (LEN = *), PARAMETER :: dirbackmag = 'start/'
-character (LEN = *), PARAMETER :: dirbacktrue = 'field/'
+character (LEN = *), PARAMETER :: dirbackmag = '/scratch/jishnu/magnetic/start/'
+character (LEN = *), PARAMETER :: dirbacktrue = '/scratch/jishnu/magnetic/true/'
 
 ! --------
 

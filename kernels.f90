@@ -31,20 +31,21 @@ SUBROUTINE PRODUCE_KERNELS
 
   test_in_2d = .true.
 
-  inquire(file=directory//'model_c.fits',exist = lexist)
+  inquire(file=directory//'model_c_'//jobno//'.fits',exist = lexist)
   if (lexist) then
-   call readfits(directory//'model_c.fits', temp1, nz)
+   call readfits(directory//'model_c_'//jobno//'.fits', temp1, nz)
    if (sum(temp1) .ne. 0) c2 = temp1
    c2 = (c2/dimc)**2.0
    c_speed = c2**0.5
    cq = c2(1,1,st_z:fi_z)**0.5
   endif
+  
 
   if (flows) then
-   inquire(file=directory//'model_psi.fits', exist = lexist)
+   inquire(file=directory//'model_psi_'//jobno//'.fits', exist = lexist)
    if (lexist) then
     allocate(psivar(nx,dim2(rank),nz_kern))
-    call readfits(directory//'model_psi.fits',psivar,nz)
+    call readfits(directory//'model_psi_'//jobno//'.fits',psivar,nz)
     deallocate(psivar)
    endif
   endif
@@ -99,11 +100,11 @@ SUBROUTINE PRODUCE_KERNELS
 !    reduction = 1.0
     boy=0.0
   
-    inquire(file=directory//'model_vectorpsi.fits', exist = lexist)
+    inquire(file=directory//'model_vectorpsi_'//jobno//'.fits', exist = lexist)
     lexist = .true.
     if (lexist) then
      allocate(psivar(nx,dim2(rank),nz_kern))
-     call readfits(directory//'model_vectorpsi.fits',psivar,nz)
+     call readfits(directory//'model_vectorpsi_'//jobno//'.fits',psivar,nz)
      call ddzkern(psivar, box, 0)
      box = -box
 !     box(:,:,180:230) = 0.0
@@ -206,31 +207,31 @@ SUBROUTINE PRODUCE_KERNELS
 
   ! FORWARD-TIME FORWARD 
 
-  call readfits(directory//'forward'//contrib//'/xiz_'//charnum//'_partial.fits', &
+  call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/xiz_'//charnum//'_partial.fits', &
 		f_xi_z, nz_kern)
   f_xi_y = 0.
-  if (.not. test_in_2d) call readfits(directory//'forward'//contrib//'/xiy_'//charnum//'_partial.fits', &
+  if (.not. test_in_2d) call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/xiy_'//charnum//'_partial.fits', &
 		f_xi_y, nz_kern)
-  call readfits(directory//'forward'//contrib//'/xix_'//charnum//'_partial.fits', &
+  call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/xix_'//charnum//'_partial.fits', &
 		f_xi_x, nz_kern)
 
-  call readfits(directory//'forward'//contrib//'/vz_'//charnum//'_partial.fits', &
+  call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/vz_'//charnum//'_partial.fits', &
 		f_vel_z, nz_kern)
 
   f_vel_y = 0.
   if (.not. test_in_2d)  &
-  call readfits(directory//'forward'//contrib//'/vy_'//charnum//'_partial.fits', &
+  call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/vy_'//charnum//'_partial.fits', &
 		f_vel_y, nz_kern)
 
-  call readfits(directory//'forward'//contrib//'/vx_'//charnum//'_partial.fits', &
+  call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/vx_'//charnum//'_partial.fits', &
 		f_vel_x, nz_kern)
 
-  call readfits(directory//'forward'//contrib//'/acc_z_'//charnum//'_partial.fits', &
+  call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/acc_z_'//charnum//'_partial.fits', &
 		f_acc_z, nz_kern)
   f_acc_y = 0.
-  if (.not. test_in_2d) call readfits(directory//'forward'//contrib//'/acc_y_'//charnum//'_partial.fits', &
+  if (.not. test_in_2d) call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/acc_y_'//charnum//'_partial.fits', &
 		f_acc_y, nz_kern)
-  call readfits(directory//'forward'//contrib//'/acc_x_'//charnum//'_partial.fits', & 
+  call readfits(directory//'forward_src'//contrib//'_ls'//jobno//'/acc_x_'//charnum//'_partial.fits', & 
 	f_acc_x, nz_kern)
 
 
@@ -243,20 +244,20 @@ SUBROUTINE PRODUCE_KERNELS
 !  call readfits(adjoint_directory//'xiy_'//charnum//'_partial.fits', a_xi_y, nz_kern)
 !  call readfits(adjoint_directory//'xix_'//charnum//'_partial.fits', a_xi_x, nz_kern)
 
-  call readfits(directory//'adjoint'//contrib//'/vz_'//charnum//'_partial.fits', & !'_'//contrib//
+  call readfits(directory//'adjoint_src'//contrib//'/vz_'//charnum//'_partial.fits', & !'_'//contrib//
 	a_vel_z, nz_kern) 
   a_vel_y = 0.
-  if (.not. test_in_2d) call readfits(directory//'adjoint'//contrib//'/vy_'//charnum//'_partial.fits', & !'_'//contrib//
+  if (.not. test_in_2d) call readfits(directory//'adjoint_src'//contrib//'/vy_'//charnum//'_partial.fits', & !'_'//contrib//
 	a_vel_y, nz_kern)
-  call readfits(directory//'adjoint'//contrib//'/vx_'//charnum//'_partial.fits', &!//'_'//contrib
+  call readfits(directory//'adjoint_src'//contrib//'/vx_'//charnum//'_partial.fits', &!//'_'//contrib
 	a_vel_x, nz_kern)
 
-  call readfits(directory//'adjoint'//contrib//'/acc_z_'//charnum//'_partial.fits', &
+  call readfits(directory//'adjoint_src'//contrib//'/acc_z_'//charnum//'_partial.fits', &
 		a_acc_z, nz_kern)
   a_acc_y = 0.
-  if (.not. test_in_2d) call readfits(directory//'adjoint'//contrib//'/acc_y_'//charnum//'_partial.fits', &
+  if (.not. test_in_2d) call readfits(directory//'adjoint_src'//contrib//'/acc_y_'//charnum//'_partial.fits', &
 		a_acc_y, nz_kern)
-  call readfits(directory//'adjoint'//contrib//'/acc_x_'//charnum//'_partial.fits', & 
+  call readfits(directory//'adjoint_src'//contrib//'/acc_x_'//charnum//'_partial.fits', & 
 	a_acc_x, nz_kern)
 
 
@@ -536,7 +537,7 @@ SUBROUTINE PRODUCE_KERNELS
   call writefits_3d(adjustl(trim(directory_rel))//'kernel_c_'//contrib//'.fits', kernelc2, nz_kern)
 
   if (rank==0) then
-  open(443,file=directory//'status/kernel'//contrib,status='unknown')
+  open(443,file=directory//'status/kernel_src'//contrib,status='unknown')
   close(443)
   endif
 
@@ -544,9 +545,9 @@ SUBROUTINE PRODUCE_KERNELS
 
  if (rank ==0) then
   print *,'Removing forward and adjoint data'
-  call system('rm -rf '//directory//'forward'//contrib//'/*partial*')
-!  call system('rm -rf '//directory//'forward'//contrib//'/*full*')
-  call system('rm -rf '//directory//'adjoint'//contrib//'/*partial*')
+  call system('rm -rf '//directory//'forward_src'//contrib//'_ls'//jobno//'/*partial*')
+!  call system('rm -rf '//directory//'forward_src'//contrib//'_ls'//jobno//'/*full*')
+  call system('rm -rf '//directory//'adjoint_src'//contrib//'/*partial*')
  ! call system('rm -rf '//directory//'adjoint'//contrib//'/*full*')
  endif
 
@@ -912,8 +913,7 @@ SUBROUTINE READ_PARAMETERS_KERNEL
  integer j
  character*80 calculation_type, directory_rel
 
-
- open(44,file=directory//'adjoint'//contrib//'/kernel_info',form='formatted',status='unknown')
+ open(44,file=directory//'adjoint_src'//contrib//'/kernel_info',form='formatted',status='unknown')
 
   read(44,*) nt_kern
   read(44,*) adj_end_stamp
@@ -921,7 +921,7 @@ SUBROUTINE READ_PARAMETERS_KERNEL
  close(44)
 
 
- open(44,file=directory//'forward'//contrib//'/kernel_info',form='formatted',status='unknown')
+ open(44,file=directory//'forward_src'//contrib//'_ls'//jobno//'/kernel_info',form='formatted',status='unknown')
 
   read(44,*) fwd_start_stamp
   read(44,*) j

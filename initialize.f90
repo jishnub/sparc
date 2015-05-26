@@ -7,8 +7,10 @@ MODULE INITIALIZE
 ! --mpif.h : The MPI parameter file
 
    INCLUDE 'params.i'
+   INCLUDE 'mpif.h'
    INCLUDE 'fftw3.f'
-   INCLUDE '/usr/local/include/mpif.h'
+!   INCLUDE '/opt/users/apps/intel/composer_xe_2015.2.164/mkl/include/fftw/fftw3.f'
+ !  INCLUDE '/opt/users/apps/intel/impi/5.0.3.048/intel64/include/mpif.h'
 
 !   INCLUDE '/usr/lpp/ppe.poe/include/thread64/mpif.h'
 
@@ -152,7 +154,7 @@ MODULE INITIALIZE
 
    integer  st_adjoint, st_forward, end_forward, cadforcing_step
    real*8 local_time, final_time, fwd_start_time
-   character*2 contrib
+   character*2 contrib,jobno
 
 
 Contains
@@ -978,7 +980,11 @@ SUBROUTINE READ_PARAMETERS
  maxtime = cadforcing_step * floor(maxtime/cadforcing_step*1.) 
  forcing_length = floor(maxtime/cadforcing_step*1.) + 1
 
-inquire(file='Instruction',exist=lexist1)
+ call getarg(1,contrib)
+ call getarg(2,jobno)
+
+ inquire(file='Instruction_'//contrib//'_'//jobno,exist=lexist1)
+!~  inquire(file='Instruction'//contrib,exist=lexist1)
 
  open(356,file=directory//'master.pixels',action='read')
  do i=1,100
@@ -989,18 +995,19 @@ inquire(file='Instruction',exist=lexist1)
 
  allocate(forward(nmasters), adjoint(nmasters), kernels(nmasters))
 
- do i=1,nmasters
-  call convert_to_string(i,contribs,2) 
-  inquire(file=directory//'status',exist=lexist)
-  if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'status')
-  inquire(file=directory//'status/forward'//contribs,exist=forward(i))
-  inquire(file=directory//'status/adjoint'//contribs,exist=adjoint(i))
-  inquire(file=directory//'status/kernel'//contribs,exist=kernels(i))
- enddo
+! do i=1,nmasters
+!  call convert_to_string(i,contribs,2) 
+!  inquire(file=directory//'status',exist=lexist)
+!  if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'status')
+!  inquire(file=directory//'status/forward'//contribs,exist=forward(i))
+!  inquire(file=directory//'status/adjoint'//contribs,exist=adjoint(i))
+!  inquire(file=directory//'status/kernel'//contribs,exist=kernels(i))
+! enddo
  
 if (lexist1) then
 
- open(22, file = 'Instruction', form='formatted', status='unknown', action='read')
+ open(22, file = 'Instruction_'//contrib//'_'//jobno, form='formatted', status='unknown', action='read')
+!~  open(22, file = 'Instruction'//contrib, form='formatted', status='unknown', action='read')
   read(22,"(A)") calculation_type
 !  read(22,"(A)") directory_rel
  ! read(22,"(A)") contrib 
@@ -1009,27 +1016,29 @@ if (lexist1) then
     COMPUTE_ADJOINT = .FALSE.
     GENERATE_WAVEFIELD = .TRUE.
     COMPUTE_FORWARD = .TRUE.
-    COMPUTE_SYNTH = .FALSE.
-    inquire(file=directory//'compute_synth',exist=lexist)
-    LINESEARCH = .FALSE.
-    inquire(file=directory//'linesearch',exist=lexist)
+    !COMPUTE_SYNTH = .FALSE.
+    inquire(file='compute_synth',exist=COMPUTE_SYNTH)
+    !LINESEARCH = .FALSE.
+    inquire(file='linesearch',exist=LINESEARCH)
     COMPUTE_DATA = .false.
-    inquire(file=directory//'compute_data', exist = COMPUTE_DATA)
-    if (lexist) LINESEARCH = .TRUE.
-    i = 1
-    do while (forward(i) .and. (i .le. nmasters))
- 	i = i+1
-    enddo
-    if (i .le. nmasters) then 
-      call convert_to_string(i,contrib,2)
-      inquire(file=directory//'forward'//contrib,exist=lexist)
-      if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'forward'//contrib)
-    elseif (i .gt. nmasters) then
-      print *,'All forward calculations processed'
-      stop
-    endif
+    inquire(file='compute_data', exist = COMPUTE_DATA)
+    !if (lexist) LINESEARCH = .TRUE.
+!    i = 1
+!    do while (forward(i) .and. (i .le. nmasters))
+! 	i = i+1
+!    enddo
+!    if (i .le. nmasters) then 
+!      call convert_to_string(i,contrib,2)
+!      call getarg(1, contrib) 
+      inquire(file=directory//'forward_src'//contrib//'_ls'//jobno,exist=lexist)
+      if (.not. lexist .and. (rank==0)) call system('mkdir '&
+                //directory//'forward_src'//contrib//'_ls'//jobno)
+!    elseif (i .gt. nmasters) then
+!      print *,'All forward calculations processed'
+!      stop
+!    endif
      
-    directory_rel = directory//'forward'//contrib//'/'
+    directory_rel = directory//'forward_src'//contrib//'_ls'//jobno//'/'
 
 
     timeline = -solartime * 3600.!timeline
@@ -1039,19 +1048,21 @@ if (lexist1) then
 
   if (adjustl(trim(calculation_type)) == 'adjoint') then
      COMPUTE_ADJOINT = .TRUE.
-     i = 1
-      do while (adjoint(i) .and. (i .le. nmasters))
- 	i = i+1
-     enddo
-     if (i .le. nmasters) then
-      call convert_to_string(i,contrib,2)
-      inquire(file=directory//'adjoint'//contrib,exist=lexist)
-      if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'adjoint'//contrib)
-     elseif (i .gt. nmasters) then
-      print *,'All adjoint calculations processed'
-      stop
-     endif
-     directory_rel = directory//'adjoint'//contrib//'/'
+     !i = 1
+
+!      call getarg(1, contrib) 
+!      do while (adjoint(i) .and. (i .le. nmasters))
+! 	i = i+1
+!     enddo
+!     if (i .le. nmasters) then
+!      call convert_to_string(i,contrib,2)
+      inquire(file=directory//'adjoint_src'//contrib,exist=lexist)
+      if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'adjoint_src'//contrib)
+!     elseif (i .gt. nmasters) then
+!      print *,'All adjoint calculations processed'
+!      stop
+!     endif
+     directory_rel = directory//'adjoint_src'//contrib//'/'
 
      final_time = solartime*3600.
      timeline = final_time - (forcing_length - 1.)*cadforcing_step*timestep
@@ -1071,19 +1082,21 @@ elseif (.not. lexist1) then
   CONSTRUCT_KERNELS = .true.
  
 
-     i = 1
-      do while (kernels(i) .and. (i .le. nmasters))
- 	i = i+1
-     enddo
-     if (i .le. nmasters) then
-      call convert_to_string(i,contrib,2)
+!     i = 1
+!      do while (kernels(i) .and. (i .le. nmasters))
+! 	i = i+1
+!     enddo
+!     if (i .le. nmasters) then
+!      call convert_to_string(i,contrib,2)
+!      call getarg(1, contrib) 
       inquire(file=directory//'kernel',exist=lexist)
       if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'kernel')
-     elseif (i .gt. nmasters) then
-      print *,'All kernels computed'
-      stop
-     endif
-     directory_rel = directory//'kernel'//contrib//'/'
+!     elseif (i .gt. nmasters) then
+!      print *,'All kernels computed'
+
+!stop
+ !    endif
+     directory_rel = directory//'kernel/'
 
 endif
 

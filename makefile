@@ -17,15 +17,11 @@ OBJS1=   driver.o        initialize.o    physics.o       dbyd2.o\
 
 OBJS2=	grad.o
 
-FC=	/usr/local/bin/mpif90
-FC77=   /usr/local/bin/mpif77
-
-##FC=	gfortran	
-##FC77=   gfortran
+FC=	/home/apps/openmpi-1.6.5/bin/mpif90
+FC77=   /home/apps/openmpi-1.6.5/bin/mpif77
 FFLAGS= -O3 -DDOUBLE_PRECISION ##-p -g ##-check all ##-fpe0 -traceback -debug #-check bounds
-INCLUDE= fftw3.f 
-LIBS1=	-L./ -lmpi -L/home/jishnu/Downloads/linux/cfitsio -lcfitsio -lfftw3
-LIBS2=	-L/home/jishnu/Downloads/linux/cfitsio -lcfitsio -lfftw3
+LIBS1 = -L/home/jishnu/lib/fftw-3.3.4/lib -lfftw3 -lcfitsio
+LIBS2= -lcfitsio -L/home/jishnu/lib/fftw-3.3.4/lib -lfftw3
 
 COMMAND1=	sparc
 COMMAND2=	grad

@@ -117,10 +117,10 @@ Contains
      call readfits(dirbackmag//'pressure2D.fits',p0,nz)
      call readfits(dirbackmag//'density2D.fits',rho0,nz)
 
-     inquire(file=directory//'model_vectorpsi.fits', exist = iteration)
+     inquire(file=directory//'model_vectorpsi_'//jobno//'.fits', exist = iteration)
      if (iteration) then
       allocate(psivar(nx,dim2(rank),nz))
-       call readfits(directory//'model_vectorpsi.fits',psivar,nz)
+       call readfits(directory//'model_vectorpsi_'//jobno//'.fits',psivar,nz)
 
        call ddz(psivar, box, 0)
        !call dbyd2(box,psivar,nx,dim2(rank)*nz,1)
@@ -138,12 +138,13 @@ Contains
    
      !call readfits(dirbackmag//'B_x2D.fits',box,nz)
      !call readfits(dirbackmag//'B_z2D.fits',boz,nz)
-     inquire(file=directory//'model_c.fits', exist = iteration)
+     inquire(file=directory//'model_c_'//jobno//'.fits', exist = iteration)
      if (iteration) &
-      call readfits(directory//'model_c.fits',c_speed,nz)
-
-     call writefits_3d('Bx.fits',box,nz)
-     call writefits_3d('Bz.fits',boz,nz)
+      call readfits(directory//'model_c_'//jobno//'.fits',c_speed,nz)
+      if (contrib == '01') then
+       call writefits_3d('Bx.fits',box,nz)
+       call writefits_3d('Bz.fits',boz,nz)
+      endif
     endif
 
      
