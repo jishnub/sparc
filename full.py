@@ -2,7 +2,8 @@ import os,shutil,glob,re,subprocess
 
 env=dict(os.environ, MPI_TYPE_MAX="1280280")
 
-codedir="/home/jishnu/sparc"
+HOME=os.environ['HOME']
+codedir=os.path.join(HOME,"sparc")
 data="/scratch/jishnu/magnetic/data"
 
 iterno=len([f for f in os.listdir(os.path.join(data,'update')) if re.match(r'misfit_[0-9]{2}$',f)])
@@ -28,7 +29,11 @@ def compute_forward_adjoint_kernel(src):
     tdiff1name="ttdiff_src"+src+".p1mode"
     Spectral=os.path.join(codedir,"Spectral")
     Adjoint=os.path.join(codedir,"Adjoint")
-    Instruction=os.path.join(codedir,"Instruction_"+src+"_00")
+    Instruction=os.path.join(codedir,"Instruction_src"+src+"_ls00")
+    
+    
+    mpipath=os.path.join(HOME,"anaconda/bin/mpiexec")
+    sparccmd=mpipath+" -np 1 ./sparc "+src+" 00"
     
     ####################################################################
     #~ Forward
@@ -37,7 +42,7 @@ def compute_forward_adjoint_kernel(src):
     if not os.path.exists(os.path.join(data,"status",forward)):
 
         shutil.copyfile(Spectral,Instruction)
-        sparccmd="/home/apps/openmpi-1.6.5/bin/mpiexec -np 1 ./sparc "+src+" 00"
+
         with open(os.path.join(data,forward,"out"+forward),'w') as outfile:
             fwd=subprocess.call(sparccmd.split(),stdout=outfile,env=env,cwd=codedir)
         
@@ -62,7 +67,7 @@ def compute_forward_adjoint_kernel(src):
 
     if not os.path.exists(os.path.join(data,"status",adjoint)):
         shutil.copyfile(Adjoint,Instruction)
-        sparccmd="/home/apps/openmpi-1.6.5/bin/mpiexec -np 1 ./sparc "+src+" 00"
+
         with open(os.path.join(data,adjoint,"out"+adjoint),'w') as outfile:
             adj=subprocess.call(sparccmd.split(),stdout=outfile,env=env,cwd=codedir)
             
@@ -71,7 +76,7 @@ def compute_forward_adjoint_kernel(src):
     ####################################################################
 
     if not os.path.exists(os.path.join(data,"status",kernel+src)):
-        sparccmd="/home/apps/openmpi-1.6.5/bin/mpiexec -np 1 ./sparc "+src+" 00"
+
         with open(os.path.join(data,kernel,"out_kernel"+src),'w') as outfile:
             kern=subprocess.call(sparccmd.split(),stdout=outfile,env=env,cwd=codedir)
     

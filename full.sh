@@ -34,6 +34,9 @@ do
     rm $directory/kernel/misfit_all_"$src"_00
 done
 
+cp $directory/model_vectorpsi_ls00.fits $directory/update/model_vectorpsi_"$itername".fits
+cp $directory/model_c_ls00.fits $directory/update/model_c_"$itername".fits
+
 find . -name "core.*" -exec rm -f {} \; 
 find . -name "fort.*" -exec rm -f {} \; 
 

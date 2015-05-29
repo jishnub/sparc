@@ -3,7 +3,8 @@ import os,sys,shutil,glob,subprocess
 
 env=dict(os.environ, MPI_TYPE_MAX="1280280")
 
-codedir="/home/jishnu/sparc/"
+HOME=os.environ['HOME']
+codedir=os.path.join(HOME,"sparc")
 datadir="/scratch/jishnu/magnetic/data"
 
 procno=int(os.environ["PBS_VNODENUM"])
@@ -19,11 +20,13 @@ def compute_data(src):
 
     forward="forward_src"+src+"_ls00"
     Spectral=os.path.join(codedir,"Spectral")
-    Instruction=os.path.join(codedir,"Instruction_"+src+"_00")
+    Instruction=os.path.join(codedir,"Instruction_src"+src+"_ls00")
     
     shutil.copyfile(Spectral,Instruction)
     
-    sparccmd="/home/apps/openmpi-1.6.5/bin/mpiexec -np 1 ./sparc "+src+" 00"
+    mpipath=os.path.join(HOME,"anaconda/bin/mpiexec")
+    sparccmd=mpipath+" -np 1 ./sparc "+src+" 00"
+    
     with open(os.path.join(datadir,forward,"out_data_forward"),'w') as outfile:
         fwd=subprocess.call(sparccmd.split(),stdout=outfile,env=env,cwd=codedir)
 
