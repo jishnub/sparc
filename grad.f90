@@ -1,402 +1,412 @@
 PROGRAM CONJGRAD
 
  
-  implicit none
-  include 'fftw3.f'
-  include 'params.i'
-  integer*8 fftw_x, fftw_z, fwdplan, invplan
-  integer i, k, iteration, nmasters, iterati, start, itermax,stencilBFGS,minBFGS
-  parameter(itermax = 25, stencilBFGS = 4)
-  real*8 x(nx), smooth_x, smooth_z, ran, z0(nz),con,den,back(6,nz), eps,psi_scale
-  parameter(smooth_x = 4, smooth_z = 4)
-  real*8, dimension(:), allocatable :: alph
-  real*8, dimension(nx,1,nz) :: totkern_c, totkern_psi, &
-  kern, update_c, update, update0, update_psi, &
-  lastupdate, lastmodel, model, gradc, lastgradc,  &
-  lastgradpsi, gradpsi, hess, lastmodel_psi, lastmodel_c
-  complex*16 filtx(nx/2+1), filtz(nz), temp(nx/2+1, 1, nz), z(nz)
-  character*2 iter, itermin, pixnum, chartem, chartminone
-  character*1 charnum
-  real*8 data(nz,6)
-  ! character*80 directory
-  logical FORCE_STEEPEST, LBFGS, lexist
+    implicit none
+    include 'fftw3.f'
+    include 'params.i'
+    integer*8 fftw_x, fftw_z, fwdplan, invplan
+    integer i, k, iteration, nmasters, iterati, start, itermax,stencilBFGS,minBFGS
+    parameter(itermax = 25, stencilBFGS = 4)
+    real*8 x(nx), smooth_x, smooth_z, ran, z0(nz),con,den,back(6,nz), eps,psi_scale
+    parameter(smooth_x = 4, smooth_z = 4)
+    real*8, dimension(:), allocatable :: alph
+    real*8, dimension(nx,1,nz) :: totkern_c, totkern_psi, &
+    kern, update_c, update, update0, update_psi, &
+    lastupdate, lastmodel, model, gradc, lastgradc,  &
+    lastgradpsi, gradpsi, hess, lastmodel_psi, lastmodel_c
+    complex*16 filtx(nx/2+1), filtz(nz), temp(nx/2+1, 1, nz), z(nz)
+    character*2 iter, itermin, pixnum, chartem, chartminone
+    character*1 charnum
+    real*8 data(nz,6)
+    ! character*80 directory
+    logical FORCE_STEEPEST, LBFGS, lexist
 
 
-  ! directory = '/nobackup/shanasog/classic/'
-  FORCE_STEEPEST = .true.
-  LBFGS = .false.
-  iteration = 0
-  write(iter, '(I2.2)') iteration 
-  inquire(file= adjustl(trim(directory))//'update/misfit_'//iter, exist = lexist)
+    ! directory = '/nobackup/shanasog/classic/'
+    FORCE_STEEPEST = .true.
+    LBFGS = .false.
+    iteration = 0
+    write(iter, '(I2.2)') iteration 
+    inquire(file= adjustl(trim(directory))//'update/misfit_'//iter, exist = lexist)
 
-  do while (lexist .and. (iteration < itermax))
+    do while (lexist .and. (iteration < itermax))
     write(iter, '(I2.2)') iteration 
     inquire(file= adjustl(trim(directory))//'update/misfit_'//iter, exist = lexist)
     iteration = iteration + 1
-  enddo
-  iteration = iteration - 1
+    enddo
+    iteration = iteration - 1
+    
+!~     print *,"iteration number",iteration
+!~     stop
 
-  if (LBFGS .and. (.not. FORCE_STEEPEST)) then
+    if (LBFGS .and. (.not. FORCE_STEEPEST)) then
     minBFGS = iteration - 1 - stencilBFGS
     if (minBFGS < 1) then
       print *,'BFGS stencil too wide'
       stop
     endif
-  endif 
+    endif 
 
-  open(44,file=file_data,position='rewind',action='read')
-  do i=1,nz
+    open(44,file=file_data,position='rewind',action='read')
+    do i=1,nz
     read(44,*) back(:,i)
-  enddo
-  close(44)
+    enddo
+    close(44)
 
-  call dfftw_plan_dft_r2c_1d(fftw_x, nx, x, filtx, FFTW_ESTIMATE)
-  call dfftw_plan_dft_1d(fftw_z, nz, z, filtz, FFTW_FORWARD, FFTW_ESTIMATE)
+    call dfftw_plan_dft_r2c_1d(fftw_x, nx, x, filtx, FFTW_ESTIMATE)
+    call dfftw_plan_dft_1d(fftw_z, nz, z, filtz, FFTW_FORWARD, FFTW_ESTIMATE)
 
-  call distmat(nx,1,x)
-  call distmat(nz,1,z0)
-  x = exp(-x**2./(2.*smooth_x**2.))
-  z = exp(-z0**2./(2.*smooth_z**2.))
+    call distmat(nx,1,x)
+    call distmat(nz,1,z0)
+    x = exp(-x**2./(2.*smooth_x**2.))
+    z = exp(-z0**2./(2.*smooth_z**2.))
 
-  call dfftw_execute(fftw_x)
-  call dfftw_execute(fftw_z)
+    call dfftw_execute(fftw_x)
+!~     open(1879,file='x_filtx')
+!~     do i=1,nx/2+1
+!~         write(1879,'(F15.12,3X,F15.12)') real(filtx(i)),aimag(filtx(i))
+!~     end do
+!~     close(1879)
+!~     stop
+    call dfftw_execute(fftw_z)
 
-  call dfftw_destroy_plan(fftw_x)
-  call dfftw_destroy_plan(fftw_z)
+    call dfftw_destroy_plan(fftw_x)
+    call dfftw_destroy_plan(fftw_z)
 
 
-  write(iter, '(I2.2)') iteration
-  write(itermin, '(I2.2)') iteration-1
+    write(iter, '(I2.2)') iteration
+    write(itermin, '(I2.2)') iteration-1
 
-  call dfftw_plan_dft_r2c_3d(fwdplan, nx, 1, nz, kern, temp, FFTW_ESTIMATE)
-  call dfftw_plan_dft_c2r_3d(invplan, nx, 1, nz, temp, kern, FFTW_ESTIMATE)
-  open(356,file=adjustl(trim(directory))//'master.pixels',action='read',position='rewind')
-  do i=1,100
+    call dfftw_plan_dft_r2c_3d(fwdplan, nx, 1, nz, kern, temp, FFTW_ESTIMATE)
+    call dfftw_plan_dft_c2r_3d(invplan, nx, 1, nz, temp, kern, FFTW_ESTIMATE)
+    open(356,file=adjustl(trim(directory))//'master.pixels',action='read',position='rewind')
+    do i=1,100
     read(356,*,end=24432)
-  enddo
-  24432 close(356)
-  nmasters = i-1
+    enddo
+    24432 close(356)
+    nmasters = i-1
 
-  totkern_c = 0.0
-  totkern_psi = 0.0
-  ! totkern_vz = 0.0
+    totkern_c = 0.0
+    totkern_psi = 0.0
+    ! totkern_vz = 0.0
 
-  do i=1,nmasters
+    do i=1,nmasters
 
-    write(pixnum, '(I2.2)') i 
-    print *,pixnum,i
+        write(pixnum, '(I2.2)') i 
+!~         print *,pixnum,i
 
-    call readfits(adjustl(trim(directory))//'kernel/kernel_c_'//pixnum//'.fits',kern, nx, 1, nz)
-!~     call filter_z(kern)
-    kern(:,1,1:10) = 0.0
-    kern(:,1,nz-9:nz) = 0.0
-    totkern_c = totkern_c + kern
+        call readfits(adjustl(trim(directory))//'kernel/kernel_c_'//pixnum//'.fits',kern, nx, 1, nz)
+        !~     call filter_z(kern)
+!~         kern(:,1,1:10) = 0.0
+!        kern(:,1,nz-9:nz) = 0.0
+        totkern_c = totkern_c + kern
 
-    call readfits(adjustl(trim(directory))//'kernel/kernel_vectorpsi_'//pixnum//'.fits',kern, nx, 1, nz)
-!~     call filter_z(kern)
-    kern(:,1,1:10) = 0.0
-    kern(:,1,nz-9:nz) = 0.0
-    totkern_psi = totkern_psi + kern
+        call readfits(adjustl(trim(directory))//'kernel/kernel_vectorpsi_'//pixnum//'.fits',kern, nx, 1, nz)
+        !~     call filter_z(kern)
+!~          kern(:,1,1:10) = 0.0
+!~         kern(:,1,nz-19:nz) = 0.0
+        totkern_psi = totkern_psi + kern
 
-    call readfits(adjustl(trim(directory))//'kernel/hessian_'//pixnum//'.fits',kern, nx, 1, nz)
-!~     call filter_z(kern)
-    hess = hess + abs(kern)
+        call readfits(adjustl(trim(directory))//'kernel/hessian_'//pixnum//'.fits',kern, nx, 1, nz)
+        !~     call filter_z(kern)
+        hess = hess + abs(kern)
 
-  !  call readfits(adjustl(trim(directory))//'kernel/kernel_vz_'//pixnum//'.fits',kern, nx, 1, nz)
-  !  kern(:,1,1:10) = 0.0
-  !  kern(:,1,nz-9:nz) = 0.0
-  !  totkern_vz = totkern_vz + kern
+        !  call readfits(adjustl(trim(directory))//'kernel/kernel_vz_'//pixnum//'.fits',kern, nx, 1, nz)
+!        kern(:,1,1:10) = 0.0
+!        kern(:,1,nz-9:nz) = 0.0
+        !  totkern_vz = totkern_vz + kern
 
-  enddo
+    enddo
+    
+    
+    
 
-  do k=1,nz
-    hess(:,:,k) = hess(:,:,k) * back(3,k)
-  enddo
-  !hess = abs(hess)/maxval(abs(hess)) + con
+    do k=1,nz
+        hess(:,:,k) = hess(:,:,k) * back(3,k)
+    enddo
+    !hess = abs(hess)/maxval(abs(hess)) + con
+    
+    
 
   !hess = hess/con
 
-  con = 0.005
-  hess = (hess)/maxval(abs(hess))
-  do k=1,nz
+    con = 0.005
+    hess = (hess)/maxval(abs(hess))
+    do k=1,nz
     do i=1,nx
       !if (hess(i,1,k) < 0.01 .and. hess(i,1,k) .ge. 0.) hess(i,1,k) = 0.01
       if (hess(i,1,k) < con) hess(i,1,k) = con
       !if (hess(i,1,k) > -0.01 .and. hess(i,1,k) < 0.) hess(i,1,k) = -0.01
     enddo
-  enddo
-  hess = hess/maxval(abs(hess))
-  !  call writefits_3d('hess.fits',hess,nx,1,nz)
+    enddo
+    hess = hess/maxval(abs(hess))
+    !  call writefits_3d('hess.fits',hess,nx,1,nz)
 
-!  hess = 1.0
-  kern = totkern_c/hess
-  call dfftw_execute(fwdplan)
-  do k=1,nz
-!~    temp(:,1,k) = temp(:,1,k)*filtx*filtz(k)
-    temp(:,1,k) = temp(:,1,k)*filtx
-  enddo
-  call dfftw_execute(invplan)
-  call filter_z(kern)
-  totkern_c = kern
+!~     hess = 1.0
+    kern = totkern_c/hess
+    
+    call dfftw_execute(fwdplan)
+    
+    do k=1,nz
+        temp(:,1,k) = temp(:,1,k)*filtx
+    enddo
+    
+    call dfftw_execute(invplan)
+    
+    call filter_z(kern)
+    totkern_c = kern
+    call filter_z(totkern_c)
 
-  kern = totkern_psi/hess
-!~   do k=1,nz
-!~    kern(:,1,k) = sum(kern(:,1,k))
-!~   enddo
-  call dfftw_execute(fwdplan)
-  do k=1,nz
-!~    temp(:,1,k) = temp(:,1,k)*filtx*filtz(k)
-    temp(:,1,k) = temp(:,1,k)*filtx
 
-  ! con = temp(1,1,k)
-  !temp(:,1,k) = 0.0
-  !temp(1,1,k) = con*filtz(k)
+    kern = totkern_psi/hess
 
-  enddo
-  call dfftw_execute(invplan)
-  call filter_z(kern)
-  totkern_psi = kern
+    print *,"Before x filter",kern(145,1,290)
+    call dfftw_execute(fwdplan)
+    
+    do k=1,nz
+        temp(:,1,k) = temp(:,1,k)*filtx
+    enddo
+    
+    
+    
+    call dfftw_execute(invplan)
+    totkern_psi = kern
 
-  !  kern = totkern_vz/hess
-  !  call dfftw_execute(fwdplan)
-  !  do k=1,nz
-  !   temp(:,1,k) = temp(:,1,k)*filtx*filtz(k)
-  !  enddo
-  !  call dfftw_execute(invplan)
-  !  totkern_vz = kern
-  
+    call dfftw_destroy_plan(fwdplan)
+    call dfftw_destroy_plan(invplan)
 
-  call dfftw_destroy_plan(fwdplan)
-  call dfftw_destroy_plan(invplan)
+    call antisymmetrize(totkern_psi)
+    
+    print *,"Before z filter",totkern_psi(145,1,290)
+    do i=1,4
+        call filter_z(totkern_psi)
+    enddo
+    print *,"After z filter",totkern_psi(145,1,290)
+    stop
+    call writefits_3d(adjustl(trim(directory))//'update/gradient_c_'//itermin//'.fits',totkern_c,nx, 1, nz)
+    call writefits_3d(adjustl(trim(directory))//'update/gradient_vectorpsi_'//itermin//'.fits',totkern_psi,nx, 1, nz)
+    ! call writefits_3d(adjustl(trim(directory))//'update/gradient_vx_'//itermin//'.fits',totkern_vx,nx, 1, nz)
+    ! call writefits_3d(adjustl(trim(directory))//'update/gradient_vz_'//itermin//'.fits',totkern_vz,nx, 1, nz)
 
-  call antisymmetrize(totkern_psi)
-  do i=1,500
-  call filter_z(totkern_psi)
-  enddo
-  call filter_z(totkern_c)  
-  call writefits_3d(adjustl(trim(directory))//'update/gradient_c_'//itermin//'.fits',totkern_c,nx, 1, nz)
-  call writefits_3d(adjustl(trim(directory))//'update/gradient_vectorpsi_'//itermin//'.fits',totkern_psi,nx, 1, nz)
-  ! call writefits_3d(adjustl(trim(directory))//'update/gradient_vx_'//itermin//'.fits',totkern_vx,nx, 1, nz)
-  ! call writefits_3d(adjustl(trim(directory))//'update/gradient_vz_'//itermin//'.fits',totkern_vz,nx, 1, nz)
-  
-!~   stop
+!~       stop
 
  
-  if (iteration .eq. 1 .or. (FORCE_STEEPEST)) then 
+    if (iteration .eq. 1 .or. (FORCE_STEEPEST)) then 
 
-    !  if (iteration == 1) then
-    !   open(22,file='~/testclassic/solar_model',action='read',position='rewind')
-    !   do i=1,nz
-    !    read(22,*) ran, lastmodel(1,1,i), ran, ran, ran
-    !    lastmodel(:,1,i) = lastmodel(1,1,i)
-    !   enddo
-    !   close(22)
-    !  else
-    print *,'Reading in previous model ', itermin
-     call readfits(adjustl(trim(directory))//'update/model_c_'//itermin//'.fits', lastmodel_c,nx, 1,  nz)  
-     call readfits(adjustl(trim(directory))//'update/model_vectorpsi_'//itermin//'.fits', lastmodel_psi,nx, 1,  nz)  
-    !   lastmodel_psi = 250e-4
-    !  endif
+        !  if (iteration == 1) then
+        !   open(22,file='~/testclassic/solar_model',action='read',position='rewind')
+        !   do i=1,nz
+        !    read(22,*) ran, lastmodel(1,1,i), ran, ran, ran
+        !    lastmodel(:,1,i) = lastmodel(1,1,i)
+        !   enddo
+        !   close(22)
+        !  else
+        print *,'Reading in previous model ', itermin
+        call readfits(adjustl(trim(directory))//'update/model_c_'//itermin//'.fits', lastmodel_c,nx, 1,  nz)  
+        call readfits(adjustl(trim(directory))//'update/model_vectorpsi_'//itermin//'.fits', lastmodel_psi,nx, 1,  nz)  
+        !   lastmodel_psi = 250e-4
+        !  endif
 
-    call writefits_3d(adjustl(trim(directory))//'update/update_c_'//itermin//'.fits',totkern_c,nx, 1, nz)
-    call writefits_3d(adjustl(trim(directory))//'update/update_vectorpsi_'//itermin//'.fits',totkern_psi,nx, 1, nz)
+        call writefits_3d(adjustl(trim(directory))//'update/update_c_'//itermin//'.fits',totkern_c,nx, 1, nz)
+        call writefits_3d(adjustl(trim(directory))//'update/update_vectorpsi_'//itermin//'.fits',totkern_psi,nx, 1, nz)
 
-    !  call writefits_3d(adjustl(trim(directory))//'update/update_vx_'//itermin//'.fits',totkern_vx,nx, 1, nz)
-    !  call writefits_3d(adjustl(trim(directory))//'update/update_vz_'//itermin//'.fits',totkern_vz,nx, 1, nz)
+        !  call writefits_3d(adjustl(trim(directory))//'update/update_vx_'//itermin//'.fits',totkern_vx,nx, 1, nz)
+        !  call writefits_3d(adjustl(trim(directory))//'update/update_vz_'//itermin//'.fits',totkern_vz,nx, 1, nz)
 
-    !  totkern_c = totkern_c/maxval(abs(totkern_c))
-    !  totkern_psi = totkern_psi/maxval(abs(totkern_psi))
-    !  totkern_vx = totkern_vx/maxval(abs(totkern_vx))
-    !  totkern_vz = totkern_vz/maxval(abs(totkern_vz))
+        !  totkern_c = totkern_c/maxval(abs(totkern_c))
+        !  totkern_psi = totkern_psi/maxval(abs(totkern_psi))
+        !  totkern_vx = totkern_vx/maxval(abs(totkern_vx))
+        !  totkern_vz = totkern_vz/maxval(abs(totkern_vz))
 
-    update_c = totkern_c 
-    update_psi = totkern_psi
-    !  update_vx = totkern_vx
-    !  update_vz = totkern_vz
-    if (iteration > 1) print *,'FORCING STEEPEST DESCENT'
+        update_c = totkern_c 
+        update_psi = totkern_psi
+        !  update_vx = totkern_vx
+        !  update_vz = totkern_vz
+        if (iteration > 1) print *,'FORCING STEEPEST DESCENT'
 
-  elseif (iteration .gt. 1 .and. (.not. FORCE_STEEPEST) .and. (.not. LBFGS) ) then 
-    print *,'CONJUGATE GRADIENT'
-    write(itermin, '(I2.2)') iteration-1
-    call readfits(adjustl(trim(directory))//'update/model_c_'//itermin//'.fits', lastmodel_c,nx, 1,  nz)  
-    write(itermin, '(I2.2)') iteration-1
-    call readfits(adjustl(trim(directory))//'update/model_vectorpsi_'//itermin//'.fits', lastmodel_psi,nx, 1,  nz)  
+    elseif (iteration .gt. 1 .and. (.not. FORCE_STEEPEST) .and. (.not. LBFGS) ) then 
+        print *,'CONJUGATE GRADIENT'
+        write(itermin, '(I2.2)') iteration-1
+        call readfits(adjustl(trim(directory))//'update/model_c_'//itermin//'.fits', lastmodel_c,nx, 1,  nz)  
+        write(itermin, '(I2.2)') iteration-1
+        call readfits(adjustl(trim(directory))//'update/model_vectorpsi_'//itermin//'.fits', lastmodel_psi,nx, 1,  nz)  
 
-    write(itermin, '(I2.2)') iteration-1
-    call readfits(adjustl(trim(directory))//'update/gradient_vectorpsi_'//itermin//'.fits', gradpsi,nx, 1,  nz)  
+        write(itermin, '(I2.2)') iteration-1
+        call readfits(adjustl(trim(directory))//'update/gradient_vectorpsi_'//itermin//'.fits', gradpsi,nx, 1,  nz)  
 
-    write(itermin, '(I2.2)') iteration-2
-    call readfits(adjustl(trim(directory))//'update/gradient_vectorpsi_'//itermin//'.fits', lastgradpsi,nx, 1,  nz)  
+        write(itermin, '(I2.2)') iteration-2
+        call readfits(adjustl(trim(directory))//'update/gradient_vectorpsi_'//itermin//'.fits', lastgradpsi,nx, 1,  nz)  
 
-    con = sum(gradpsi*(gradpsi - lastgradpsi))  !! CHECK THIS?
-    den = sum(lastgradpsi**2.)! + lastgradc**2.) !! CHECK THIS?
-    !stop
-    !---
-    ! write(itermin, '(I2.2)') iteration-1
-    ! call readfits(adjustl(trim(directory))//'update/gradient_vz_'//itermin//'.fits', gradvz,nx, 1,  nz)  
+        con = sum(gradpsi*(gradpsi - lastgradpsi))  !! CHECK THIS?
+            den = sum(lastgradpsi**2.)! + lastgradc**2.) !! CHECK THIS?
+        !stop
+        !---
+        ! write(itermin, '(I2.2)') iteration-1
+        ! call readfits(adjustl(trim(directory))//'update/gradient_vz_'//itermin//'.fits', gradvz,nx, 1,  nz)  
 
-    ! write(itermin, '(I2.2)') iteration-2
-    ! call readfits(adjustl(trim(directory))//'update/gradient_vz_'//itermin//'.fits', lastgradvz,nx, 1,  nz)  
+        ! write(itermin, '(I2.2)') iteration-2
+        ! call readfits(adjustl(trim(directory))//'update/gradient_vz_'//itermin//'.fits', lastgradvz,nx, 1,  nz)  
 
-    ! con = sum(gradvz*(gradvz - lastgradvz)) + con
-    ! den = sum(lastgradvz**2.) + den
+        ! con = sum(gradvz*(gradvz - lastgradvz)) + con
+        ! den = sum(lastgradvz**2.) + den
 
-    !---
+        !---
 
-    write(itermin, '(I2.2)') iteration-1
-    call readfits(adjustl(trim(directory))//'update/gradient_c_'//itermin//'.fits', gradc,nx, 1,  nz)  
+        write(itermin, '(I2.2)') iteration-1
+        call readfits(adjustl(trim(directory))//'update/gradient_c_'//itermin//'.fits', gradc,nx, 1,  nz)  
 
-    write(itermin, '(I2.2)') iteration-2
-    call readfits(adjustl(trim(directory))//'update/gradient_c_'//itermin//'.fits', lastgradc,nx, 1,  nz)  
+        write(itermin, '(I2.2)') iteration-2
+        call readfits(adjustl(trim(directory))//'update/gradient_c_'//itermin//'.fits', lastgradc,nx, 1,  nz)  
 
-    ! UNDO THIS
-    ! con = sum(gradc*(gradc - lastgradc)) + con
-    ! den = sum(lastgradc**2.) + den
+        ! UNDO THIS
+        ! con = sum(gradc*(gradc - lastgradc)) + con
+        ! den = sum(lastgradc**2.) + den
 
-    !---
-    con = con/den
-    den = con
-    if (con .lt. 0)  con = 0
-    print *,con, den
+        !---
+        con = con/den
+        den = con
+        if (con .lt. 0)  con = 0
+        print *,con, den
 
-    write(itermin, '(I2.2)') iteration-2
-    call readfits(adjustl(trim(directory))//'update/update_c_'//itermin//'.fits', lastupdate,nx, 1,  nz)  
-    update_c = totkern_c +  con* lastupdate
+        write(itermin, '(I2.2)') iteration-2
+        call readfits(adjustl(trim(directory))//'update/update_c_'//itermin//'.fits', lastupdate,nx, 1,  nz)  
+        update_c = totkern_c +  con* lastupdate
 
-    write(itermin, '(I2.2)') iteration-1
-    call writefits_3d(adjustl(trim(directory))//'update/update_c_'//itermin//'.fits', update_c,nx, 1,  nz)  
+        write(itermin, '(I2.2)') iteration-1
+        call writefits_3d(adjustl(trim(directory))//'update/update_c_'//itermin//'.fits', update_c,nx, 1,  nz)  
 
-    !---
+        !---
 
-    write(itermin, '(I2.2)') iteration-2
-    call readfits(adjustl(trim(directory))//'update/update_vectorpsi_'//itermin//'.fits', lastupdate,nx, 1,  nz)  
-    update_psi = totkern_psi +  con*lastupdate 
+        write(itermin, '(I2.2)') iteration-2
+        call readfits(adjustl(trim(directory))//'update/update_vectorpsi_'//itermin//'.fits', lastupdate,nx, 1,  nz)  
+        update_psi = totkern_psi +  con*lastupdate 
 
-!    print *,maxval(totkern_psi/maxval(totkern_psi) - lastupdate/maxval(lastupdate))!*1e-12,maxval(con*lastupdate)*1e-12
-    write(itermin, '(I2.2)') iteration-1
-    call writefits_3d(adjustl(trim(directory))//'update/update_vectorpsi_'//itermin//'.fits', update_psi,nx, 1,  nz)  
+        !    print *,maxval(totkern_psi/maxval(totkern_psi) - lastupdate/maxval(lastupdate))!*1e-12,maxval(con*lastupdate)*1e-12
+        write(itermin, '(I2.2)') iteration-1
+        call writefits_3d(adjustl(trim(directory))//'update/update_vectorpsi_'//itermin//'.fits', update_psi,nx, 1,  nz)  
 
-    !---
+        !---
 
-    ! write(itermin, '(I2.2)') iteration-2
-    ! call readfits(adjustl(trim(directory))//'update/update_vz_'//itermin//'.fits', lastupdate,nx, 1,  nz)  
-    ! update_vz = totkern_vz +  con*lastupdate 
+        ! write(itermin, '(I2.2)') iteration-2
+        ! call readfits(adjustl(trim(directory))//'update/update_vz_'//itermin//'.fits', lastupdate,nx, 1,  nz)  
+        ! update_vz = totkern_vz +  con*lastupdate 
 
-    ! write(itermin, '(I2.2)') iteration-1
-    ! call writefits_3d(adjustl(trim(directory))//'update/update_vz_'//itermin//'.fits', update_vz,nx, 1,  nz)  
-
-
-    !---
+        ! write(itermin, '(I2.2)') iteration-1
+        ! call writefits_3d(adjustl(trim(directory))//'update/update_vz_'//itermin//'.fits', update_vz,nx, 1,  nz)  
 
 
-    ! update_c = update_c/maxval(abs(update_c))
-    ! update_psi = update_psi/maxval(abs(update_psi))
-    ! update_vx = update_vx/maxval(abs(update_vx))
-    ! update_vz = update_vz/maxval(abs(update_vz))
-    ! lastupdate = lastupdate/maxval(abs(lastupdate))
+        !---
 
-    ! update_vx = totkern_vx + sum(totkern_vx*(totkern_vx - lastupdate))/sum(lastupdate**2.) * lastupdate
-    ! update_vz = totkern_vz + sum(totkern_vz*(totkern_vz - lastupdate))/sum(lastupdate**2.) * lastupdate
 
-  elseif (iteration .gt. 1 .and. LBFGS) then
+        ! update_c = update_c/maxval(abs(update_c))
+        ! update_psi = update_psi/maxval(abs(update_psi))
+        ! update_vx = update_vx/maxval(abs(update_vx))
+        ! update_vz = update_vz/maxval(abs(update_vz))
+        ! lastupdate = lastupdate/maxval(abs(lastupdate))
+
+        ! update_vx = totkern_vx + sum(totkern_vx*(totkern_vx - lastupdate))/sum(lastupdate**2.) * lastupdate
+        ! update_vz = totkern_vz + sum(totkern_vz*(totkern_vz - lastupdate))/sum(lastupdate**2.) * lastupdate
+
+    elseif (iteration .gt. 1 .and. LBFGS) then
    
-    allocate(alph(1:iteration))
-    iterati = iteration - 1
-    write(chartem, '(I2.2)') iterati
-    call readfits(adjustl(trim(directory))//'update/model_'//chartem//'.fits', model,nx, 1,  nz)  
+        allocate(alph(1:iteration))
+        iterati = iteration - 1
+        write(chartem, '(I2.2)') iterati
+        call readfits(adjustl(trim(directory))//'update/model_'//chartem//'.fits', model,nx, 1,  nz)  
 
-    !  call readfits(adjustl(trim(directory))//'update/gradient_vx_'//chartem//'.fits', gradvx,nx, 1,  nz)  
-    !  call readfits(adjustl(trim(directory))//'update/gradient_vz_'//chartem//'.fits', gradvy,nx, 1,  nz)  
-      call readfits(adjustl(trim(directory))//'update/gradient_c_'//chartem//'.fits', gradc,nx, 1,  nz)  
+        !  call readfits(adjustl(trim(directory))//'update/gradient_vx_'//chartem//'.fits', gradvx,nx, 1,  nz)  
+        !  call readfits(adjustl(trim(directory))//'update/gradient_vz_'//chartem//'.fits', gradvy,nx, 1,  nz)  
+          call readfits(adjustl(trim(directory))//'update/gradient_c_'//chartem//'.fits', gradc,nx, 1,  nz)  
 
-     update_c = gradc
-     
-    do i=iterati-1, minBFGS, -1
+         update_c = gradc
+         
+        do i=iterati-1, minBFGS, -1
 
-      write(chartem, '(I2.2)') i
+            write(chartem, '(I2.2)') i
 
-      call readfits(adjustl(trim(directory))//'update/model_c_'//chartem//'.fits', lastmodel,nx, 1,  nz)  
+            call readfits(adjustl(trim(directory))//'update/model_c_'//chartem//'.fits', lastmodel,nx, 1,  nz)  
 
-      !  call readfits(adjustl(trim(directory))//'update/gradient_vx_'//chartem//'.fits', lastgradvx,nx, 1,  nz)  
-      !  call readfits(adjustl(trim(directory))//'update/gradient_vz_'//chartem//'.fits', lastgradvy,nx, 1,  nz)  
-      call readfits(adjustl(trim(directory))//'update/gradient_c_'//chartem//'.fits', lastgradc,nx, 1,  nz)  
-      alph(i) = sum((model-lastmodel)*update_c) /sum((model-lastmodel)*(gradc-lastgradc))
-      update_c = update_c - alph(i) * (gradc - lastgradc) 
+            !  call readfits(adjustl(trim(directory))//'update/gradient_vx_'//chartem//'.fits', lastgradvx,nx, 1,  nz)  
+            !  call readfits(adjustl(trim(directory))//'update/gradient_vz_'//chartem//'.fits', lastgradvy,nx, 1,  nz)  
+            call readfits(adjustl(trim(directory))//'update/gradient_c_'//chartem//'.fits', lastgradc,nx, 1,  nz)  
+            alph(i) = sum((model-lastmodel)*update_c) /sum((model-lastmodel)*(gradc-lastgradc))
+            update_c = update_c - alph(i) * (gradc - lastgradc) 
 
-      model = lastmodel
-      gradc = lastgradc
-    enddo
+            model = lastmodel
+            gradc = lastgradc
+        enddo
    
-    write(chartem, '(I2.2)') i
-    call readfits(adjustl(trim(directory))//'update/model_c_'//chartem//'.fits', lastmodel,nx, 1,  nz)  
+        write(chartem, '(I2.2)') i
+        call readfits(adjustl(trim(directory))//'update/model_c_'//chartem//'.fits', lastmodel,nx, 1,  nz)  
 
-    !  call readfits(adjustl(trim(directory))//'update/gradient_vx_'//chartem//'.fits', gradvx,nx, 1,  nz)  
-    !  call readfits(adjustl(trim(directory))//'update/gradient_vz_'//chartem//'.fits', gradvy,nx, 1,  nz)  
-    call readfits(adjustl(trim(directory))//'update/gradient_c_'//chartem//'.fits', lastgradc,nx, 1,  nz)  
-    start = i+1
-    ! update_c = gradc
-    do i=start, iterati-1
-    print *,i, i-1 
-      write(chartem, '(I2.2)') i
+        !  call readfits(adjustl(trim(directory))//'update/gradient_vx_'//chartem//'.fits', gradvx,nx, 1,  nz)  
+        !  call readfits(adjustl(trim(directory))//'update/gradient_vz_'//chartem//'.fits', gradvy,nx, 1,  nz)  
+        call readfits(adjustl(trim(directory))//'update/gradient_c_'//chartem//'.fits', lastgradc,nx, 1,  nz)  
+        start = i+1
+        ! update_c = gradc
+        do i=start, iterati-1
+            print *,i, i-1 
+            write(chartem, '(I2.2)') i
 
-      call readfits(adjustl(trim(directory))//'update/model_c_'//chartem//'.fits', model,nx, 1,  nz)  
+            call readfits(adjustl(trim(directory))//'update/model_c_'//chartem//'.fits', model,nx, 1,  nz)  
 
-      !  call readfits(adjustl(trim(directory))//'update/gradient_vx_'//chartem//'.fits', lastgradvx,nx, 1,  nz)  
-      !  call readfits(adjustl(trim(directory))//'update/gradient_vz_'//chartem//'.fits', lastgradvy,nx, 1,  nz)  
-      call readfits(adjustl(trim(directory))//'update/gradient_c_'//chartem//'.fits', gradc,nx, 1,  nz)  
-      alph(i) = alph(i) - sum((gradc-lastgradc)*update_c) /sum((model-lastmodel)*(gradc-lastgradc))
-      update_c = update_c + alph(i) * (model - lastmodel) 
-
-
-      !  print *,sum((model-lastmodel)*(gradc-lastgradc)), sum((gradc - lastgradc))
-      lastmodel = model
-      lastgradc = gradc
-    enddo
-    !print *,alph!, bet
-    ! print *,alph
-    ! update_c = update_c/maxval(abs(update_c))
+            !  call readfits(adjustl(trim(directory))//'update/gradient_vx_'//chartem//'.fits', lastgradvx,nx, 1,  nz)  
+            !  call readfits(adjustl(trim(directory))//'update/gradient_vz_'//chartem//'.fits', lastgradvy,nx, 1,  nz)  
+            call readfits(adjustl(trim(directory))//'update/gradient_c_'//chartem//'.fits', gradc,nx, 1,  nz)  
+            alph(i) = alph(i) - sum((gradc-lastgradc)*update_c) /sum((model-lastmodel)*(gradc-lastgradc))
+            update_c = update_c + alph(i) * (model - lastmodel) 
 
 
-  endif
+            !  print *,sum((model-lastmodel)*(gradc-lastgradc)), sum((gradc - lastgradc))
+            lastmodel = model
+            lastgradc = gradc
+        enddo
+        !print *,alph!, bet
+        ! print *,alph
+        ! update_c = update_c/maxval(abs(update_c))
 
-  con = maxval(abs(update_psi)) !! NORMALIZING FACTOR??
-  den = maxval(abs(update_c))
-!~   print *,con,den
-  ! if (con .lt. den) con = den
-  update_c = update_c/con 
-  update_psi = update_psi/con 
+
+    endif
+
+    con = maxval(abs(update_psi)) !! NORMALIZING FACTOR??
+    den = maxval(abs(update_c))
+    !~   print *,con,den
+    ! if (con .lt. den) con = den
+    update_c = update_c/con 
+    update_psi = update_psi/con 
   
-  !eps = 1.5e-2
-  !eps = 3e-3
-  ! eps = 5e-3
-   eps=1.5e-2
-  open(7,file = file_data,form = 'formatted',status = 'old')
-  do k = 1,nz
-    read(7,*) data(k,:)
-  enddo
-  close(7)
+    !eps = 1.5e-2
+    !eps = 3e-3
+    eps = 1e-7
+    !~    eps=6e-4
+    open(7,file = file_data,form = 'formatted',status = 'old')
+    
+    do k = 1,nz
+        read(7,*) data(k,:)
+    enddo
+    close(7)
 
-  do k =1,nz
-    z0(k) = (data(k,1)-1.)*695.9895
-  enddo
-  !update_psi=update_psi*8. 
-  !print *,maxval(lastmodel_psi),minval(lastmodel_psi) ,maxval(update_psi)
+    do k =1,nz
+        z0(k) = (data(k,1)-1.)*695.9895
+    enddo
+    !update_psi=update_psi*8. 
+    !print *,maxval(lastmodel_psi),minval(lastmodel_psi) ,maxval(update_psi)
   
     psi_scale=sqrt(sum(lastmodel_psi**2)/(nx*ny*nz)) * 1e-2
-  do i = 1,5
-    write(charnum,'(I1.1)') i
-    update = lastmodel_c*(1. + eps * i * update_c*0.0)
-    call writefits_3d(adjustl(trim(directory))//'update/test_c_'//charnum//'.fits', update,nx, 1,  nz)
+    do i = 1,5
+        write(charnum,'(I1.1)') i
+        update = lastmodel_c*(1. + eps * i * update_c*0.0)
+        call writefits_3d(adjustl(trim(directory))//'update/test_c_'//charnum//'.fits', update,nx, 1,  nz)
 
-    !~   update = lastmodel_psi*(1. + eps * (i) * update_psi) !! DOING LOGARITHMIC HERE. CHECK THIS ?? 
-!     print *,'psi',psi_rms,maxval(abs(eps*i*update_psi))
-    update = lastmodel_psi + eps * i * psi_scale * update_psi
-    
-    !  do k=1,nz
-    !    update(:,1,k) = (update(:,1,k) -update(1,1,1))/(1. + exp((z0(k) + 3.6)/0.3)) + update(1,1,1) 
-    !  enddo
-    call writefits_3d(adjustl(trim(directory))//'update/test_vectorpsi_'//charnum//'.fits', update,nx, 1,  nz)
-  enddo
+        !~   update = lastmodel_psi*(1. + eps * (i) * update_psi) !! DOING LOGARITHMIC HERE. CHECK THIS ?? 
+        !     print *,'psi',psi_rms,maxval(abs(eps*i*update_psi))
+        update = lastmodel_psi + eps * i * psi_scale * update_psi
+
+        !  do k=1,nz
+        !    update(:,1,k) = (update(:,1,k) -update(1,1,1))/(1. + exp((z0(k) + 3.6)/0.3)) + update(1,1,1) 
+        !  enddo
+        call writefits_3d(adjustl(trim(directory))//'update/test_vectorpsi_'//charnum//'.fits', update,nx, 1,  nz)
+    enddo
 
 
 END PROGRAM CONJGRAD
@@ -442,7 +452,7 @@ SUBROUTINE readfits(filename,read,dim1,dim2,dim3)
   inquire(file=filename, exist=  lexist)
   if (.not. lexist) print *, 'File doesnt exist: '//filename
   if (lexist) then
-    print *,'Now reading the file: '//filename
+    !print *,'Now reading the file: '//filename
     call ftopen(unit,filename,readwrite,blocksize,status)
 
     naxes(1) = dim1
@@ -530,7 +540,7 @@ SUBROUTINE FILTER_Z(a)
 !  coeffs(5) = exp(-5**2/(4*sigmaz**2))
 
   allocate(temp(nx,ny,nz))
-  kst = 6
+  kst = 2!6
   do k=6,nz-5
     temp(:,:,k) = coeffs(0)*a(:,:,k) + 0.5*coeffs(1)*(a(:,:,k-1) + a(:,:,k+1)) &
                 +  0.5*coeffs(2)*(a(:,:,k-2) + a(:,:,k+2))  &
@@ -556,7 +566,7 @@ SUBROUTINE FILTER_Z(a)
   do k=kst,nz-kst+1
     a(:,:,k) = temp(:,:,k)
   enddo
-
+    
  
 ! a(:,:,1:kst-1) = 0.0
 !  a(:,:,nz-kst+2:nz) = 0.0

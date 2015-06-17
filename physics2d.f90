@@ -101,94 +101,94 @@ Contains
 
  if (damp_waves) call init_damping_2d
 
-   if (magnetic) then
-!    call create_2d_slices ()
-    
-    if ((.not. kernel_mode) .or. (kernel_mode .and. COMPUTE_DATA) ) then
+    if (magnetic) then
+    !    call create_2d_slices ()
+        
+        if ((.not. kernel_mode) .or. (kernel_mode .and. COMPUTE_DATA) ) then
 
-     call readfits(dirbacktrue//'B_x2D.fits',box,nz)
-     call readfits(dirbacktrue//'B_z2D.fits',boz,nz)
-     call readfits(dirbacktrue//'pressure2D.fits',p0,nz)
-     call readfits(dirbacktrue//'density2D.fits',rho0,nz)
-     call readfits(dirbacktrue//'soundspeed2D.fits',c_speed,nz)
+            call readfits(dirbacktrue//'B_x2D.fits',box,nz)
+            call readfits(dirbacktrue//'B_z2D.fits',boz,nz)
+            call readfits(dirbacktrue//'pressure2D.fits',p0,nz)
+            call readfits(dirbacktrue//'density2D.fits',rho0,nz)
+            call readfits(dirbacktrue//'soundspeed2D.fits',c_speed,nz)
 
-    elseif (kernel_mode .and. (.not. compute_data)) then
+        elseif (kernel_mode .and. (.not. compute_data)) then
 
-     call readfits(dirbackmag//'pressure2D.fits',p0,nz)
-     call readfits(dirbackmag//'density2D.fits',rho0,nz)
+            call readfits(dirbackmag//'pressure2D.fits',p0,nz)
+            call readfits(dirbackmag//'density2D.fits',rho0,nz)
 
-     inquire(file=directory//'model_vectorpsi_'//jobno//'.fits', exist = iteration)
-     if (iteration) then
-      allocate(psivar(nx,dim2(rank),nz))
-       call readfits(directory//'model_vectorpsi_'//jobno//'.fits',psivar,nz)
+            inquire(file=directory//'model_vectorpsi_ls'//jobno//'.fits', exist = iteration)
+            if (iteration) then
+                allocate(psivar(nx,dim2(rank),nz))
+                call readfits(directory//'model_vectorpsi_ls'//jobno//'.fits',psivar,nz)
 
-       call ddz(psivar, box, 0)
-       !call dbyd2(box,psivar,nx,dim2(rank)*nz,1)
-       box = -box
-       !box(:,1,nz-1) = 0.5*(box(:,1,nz) + box(:,1,nz-2))
-       !box(:,1,nz) = box(:,1,nz-1)
-      
-!       box(:,:,180:230) = 0.0
+                call ddz(psivar, box, 0)
+                !call dbyd2(box,psivar,nx,dim2(rank)*nz,1)
+                box = -box
+                !box(:,1,nz-1) = 0.5*(box(:,1,nz) + box(:,1,nz-2))
+                !box(:,1,nz) = box(:,1,nz-1)
+
+                !       box(:,:,180:230) = 0.0
+
+                !       call ddx(psivar, boz, 1)
+                call dbyd1(boz,psivar,nx,dim2(rank)*nz,0)
+                boz = boz*stretchx
+                deallocate(psivar)
+            endif
        
-!       call ddx(psivar, boz, 1)
-       call dbyd1(boz,psivar,nx,dim2(rank)*nz,0)
-       boz = boz*stretchx
-      deallocate(psivar)
-     endif
-   
-     !call readfits(dirbackmag//'B_x2D.fits',box,nz)
-     !call readfits(dirbackmag//'B_z2D.fits',boz,nz)
-     inquire(file=directory//'model_c_'//jobno//'.fits', exist = iteration)
-     if (iteration) &
-      call readfits(directory//'model_c_'//jobno//'.fits',c_speed,nz)
-      if (contrib == '01') then
-       call writefits_3d('Bx.fits',box,nz)
-       call writefits_3d('Bz.fits',boz,nz)
-      endif
-    endif
+            !call readfits(dirbackmag//'B_x2D.fits',box,nz)
+            !call readfits(dirbackmag//'B_z2D.fits',boz,nz)
+            inquire(file=directory//'model_c_ls'//jobno//'.fits', exist = iteration)
+            if (iteration) &
+                call readfits(directory//'model_c_ls'//jobno//'.fits',c_speed,nz)
+            if (contrib == '01') then
+                call writefits_3d('Bx_ls'//jobno//'.fits',box,nz)
+                call writefits_3d('Bz_ls'//jobno//'.fits',boz,nz)
+            endif
+        endif
 
      
-    box = box/dimb
-    boz = boz/dimb
-    p0 = p0/(dimrho * dimc**2.)
-    rho0 = rho0/dimrho
-    c_speed = c_speed/dimc
+        box = box/dimb
+        boz = boz/dimb
+        p0 = p0/(dimrho * dimc**2.)
+        rho0 = rho0/dimrho
+        c_speed = c_speed/dimc
 
-    !print *,maxval((box**2.+boz**2.)**0.5/rho0**0.5*dimc*10.**(-5.))
-    c2 = c_speed**2.
-    cq = c_speed(1,1,:)
-    rhoq = rho0(1,1,:)
-    
-    do k=1,nz
-     reduction(:,:,k) = (boz(:,:,k)**2.+ box(:,:,k)**2.)/(rho0(:,:,k)*cq(k)**2.) 
-    enddo
-    reduction = 8./(8. + reduction)
+        !print *,maxval((box**2.+boz**2.)**0.5/rho0**0.5*dimc*10.**(-5.))
+        c2 = c_speed**2.
+        cq = c_speed(1,1,:)
+        rhoq = rho0(1,1,:)
+        
+        do k=1,nz
+            reduction(:,:,k) = (boz(:,:,k)**2.+ box(:,:,k)**2.)/(rho0(:,:,k)*cq(k)**2.) 
+        enddo
+        reduction = 8./(8. + reduction)
 
-    call ddz(box, curlboy, 1)
-    call ddx(boz, reduction,1)
-    curlboy = curlboy-reduction
-
-
-    reduction = 1.
-    do k=nz-10, nz
-     reduction(:,:,k) = reduction(:,:,k) * ((k - nz)/10.0)**4.
-    enddo
-    reduction=1.0  
-    
-!    do k=nz-30,nz 
-!     curlboy(:,:,k) = curlboy(:,:,k)/(1. + exp(k-(nz-20.0)) )
- !   enddo
-!    curlboy(:,:,nz-30:nz) = 0.
-!    curlboy = 0.
-    
-    box = box * reduction**0.5
-    boz = boz * reduction**0.5
-    curlboy = curlboy * reduction**0.5
+        call ddz(box, curlboy, 1)
+        call ddx(boz, reduction,1)
+        curlboy = curlboy-reduction
 
 
-    deallocate(reduction)
+        reduction = 1.
+        do k=nz-10, nz
+            reduction(:,:,k) = reduction(:,:,k) * ((k - nz)/10.0)**4.
+        enddo
+        reduction=1.0  
+        
+    !    do k=nz-30,nz 
+    !     curlboy(:,:,k) = curlboy(:,:,k)/(1. + exp(k-(nz-20.0)) )
+     !   enddo
+    !    curlboy(:,:,nz-30:nz) = 0.
+    !    curlboy = 0.
+        
+        box = box * reduction**0.5
+        boz = boz * reduction**0.5
+        curlboy = curlboy * reduction**0.5
 
-   endif
+
+        deallocate(reduction)
+
+    endif
     
  
    ! Damping length from the horizontal boundaries

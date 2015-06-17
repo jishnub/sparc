@@ -19,7 +19,7 @@ find $directory -name "compute_synth" -exec rm -f {} \;
 iter=`find $directory/update -name 'linesearch_[0-9][0-9]'|wc -l`
 itername=`printf "%02d" $iter`
 
-touch $directory/linesearch
+touch linesearch
 echo "Starting iterations at "`date`
 
 for lin in `seq 1 5`

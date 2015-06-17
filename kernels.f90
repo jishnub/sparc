@@ -31,9 +31,9 @@ SUBROUTINE PRODUCE_KERNELS
 
   test_in_2d = .true.
 
-  inquire(file=directory//'model_c_'//jobno//'.fits',exist = lexist)
+  inquire(file=directory//'model_c_ls'//jobno//'.fits',exist = lexist)
   if (lexist) then
-   call readfits(directory//'model_c_'//jobno//'.fits', temp1, nz)
+   call readfits(directory//'model_c_ls'//jobno//'.fits', temp1, nz)
    if (sum(temp1) .ne. 0) c2 = temp1
    c2 = (c2/dimc)**2.0
    c_speed = c2**0.5
@@ -100,11 +100,11 @@ SUBROUTINE PRODUCE_KERNELS
 !    reduction = 1.0
     boy=0.0
   
-    inquire(file=directory//'model_vectorpsi_'//jobno//'.fits', exist = lexist)
+    inquire(file=directory//'model_vectorpsi_ls'//jobno//'.fits', exist = lexist)
     lexist = .true.
     if (lexist) then
      allocate(psivar(nx,dim2(rank),nz_kern))
-     call readfits(directory//'model_vectorpsi_'//jobno//'.fits',psivar,nz)
+     call readfits(directory//'model_vectorpsi_ls'//jobno//'.fits',psivar,nz)
      call ddzkern(psivar, box, 0)
      box = -box
 !     box(:,:,180:230) = 0.0

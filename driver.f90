@@ -146,11 +146,11 @@ Program driver
     if (FLOWS) then
       v0_x = 0.0
       v0_z = 0.0
-  endif
+    endif
 
-    inquire(file=directory//'model_c_'//jobno//'.fits', exist = iteration)
+    inquire(file=directory//'model_c_ls'//jobno//'.fits', exist = iteration)
     if (iteration) then
-      call readfits(directory//'model_c_'//jobno//'.fits',c2,nz)
+      call readfits(directory//'model_c_ls'//jobno//'.fits',c2,nz)
       c2 = (c2/dimc)**2
     endif
 
@@ -297,8 +297,7 @@ Program driver
 
   if (kernel_mode) then
     call DETERMINE_STATUS(init, maxtime)
-    if (rank==0) call system('rm Instruction_'//contrib//'_'//jobno)
-    !if (rank==0) call system('rm Instruction')
+    if (rank==0) call system('rm Instruction_src'//contrib//'_ls'//jobno)
 
     if (compute_forward) then
         indexglob = 0
@@ -1325,17 +1324,17 @@ SUBROUTINE ADJOINT_SOURCE_FILT(nt)
  dt = t(2)-t(1)
 
  if (rank==0 .and. (.not. linesearch)) then
-   open(596,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.0',action='write',status='replace')
-   open(597,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.1',action='write',status='replace')
+   open(596,file=directory//'forward_src'//contrib//'_ls00/windows.0',action='write',status='replace')
+   open(597,file=directory//'forward_src'//contrib//'_ls00/windows.1',action='write',status='replace')
  elseif(rank==0 .and. linesearch) then
 
-   inquire(file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.0',exist=lexist0)
+   inquire(file=directory//'forward_src'//contrib//'_ls00/windows.0',exist=lexist0)
    if (lexist0) &
-    open(596,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.0',action='read',status='old')
+    open(596,file=directory//'forward_src'//contrib//'_ls00/windows.0',action='read',status='old')
 
-   inquire(file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.1',exist=lexist1)
+   inquire(file=directory//'forward_src'//contrib//'_ls00/windows.1',exist=lexist1)
    if (lexist1) &
-    open(597,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.1',action='read',status='old')
+    open(597,file=directory//'forward_src'//contrib//'_ls00/windows.1',action='read',status='old')
  endif
 
  adj = 0.0
@@ -1814,14 +1813,14 @@ SUBROUTINE MISFIT_ALL(nt)
 
    do i=0,5
     call convert_to_string(i, ord, 1)
-    open(980+i,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.all.'//ord,action='write',status='replace')
+    open(980+i,file=directory//'forward_src'//contrib//'_ls00/windows.all.'//ord,action='write',status='replace')
    enddo
 
  elseif(rank==0 .and. linesearch) then
 
    do i=0,5
     call convert_to_string(i, ord, 1)
-    open(980+i,file=directory//'forward_src'//contrib//'_ls'//jobno//'/windows.all.'//ord,action='read',status='old')
+    open(980+i,file=directory//'forward_src'//contrib//'_ls00/windows.all.'//ord,action='read',status='old')
    enddo
 
  endif

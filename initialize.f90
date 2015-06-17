@@ -963,164 +963,126 @@ end Subroutine kernel_back
 
 SUBROUTINE READ_PARAMETERS
 
- implicit none
- integer i
- character*80 calculation_type, directory_rel
- character*2 whether_2D, contribs
- integer ierr
- logical lexist1, lexist2, lexist
- logical, allocatable, dimension(:) :: forward, adjoint, kernels
+    implicit none
+    integer i
+    character*80 calculation_type, directory_rel
+    character*2 whether_2D, contribs
+    integer ierr
+    logical lexist1, lexist2, lexist
+    logical, allocatable, dimension(:) :: forward, adjoint, kernels
 
- compute_forward = .false.
- compute_adjoint = .false.
- construct_kernels = .false.
- generate_wavefield = .false.
- cadforcing_step = FLOOR(cadforcing/timestep)
- maxtime = floor((solartime*3600. + 2.0/nupeak)/timestep) + 2
- maxtime = cadforcing_step * floor(maxtime/cadforcing_step*1.) 
- forcing_length = floor(maxtime/cadforcing_step*1.) + 1
+    compute_forward = .false.
+    compute_adjoint = .false.
+    construct_kernels = .false.
+    generate_wavefield = .false.
+    cadforcing_step = FLOOR(cadforcing/timestep)
+    maxtime = floor((solartime*3600. + 2.0/nupeak)/timestep) + 2
+    maxtime = cadforcing_step * floor(maxtime/cadforcing_step*1.) 
+    forcing_length = floor(maxtime/cadforcing_step*1.) + 1
 
- call getarg(1,contrib)
- call getarg(2,jobno)
+    call getarg(1,contrib)
+    call getarg(2,jobno)
 
- inquire(file='Instruction_'//contrib//'_'//jobno,exist=lexist1)
-!~  inquire(file='Instruction'//contrib,exist=lexist1)
+    inquire(file='Instruction_src'//contrib//'_ls'//jobno,exist=lexist1)
 
- open(356,file=directory//'master.pixels',action='read')
- do i=1,100
-  read(356,*,end=24432)
- enddo
- 24432 close(356)
- nmasters = i-1
+    open(356,file=directory//'master.pixels',action='read')
+    do i=1,100
+        read(356,*,end=24432)
+    enddo
+    24432 close(356)
+    nmasters = i-1
 
- allocate(forward(nmasters), adjoint(nmasters), kernels(nmasters))
+    allocate(forward(nmasters), adjoint(nmasters), kernels(nmasters))
 
-! do i=1,nmasters
-!  call convert_to_string(i,contribs,2) 
-!  inquire(file=directory//'status',exist=lexist)
-!  if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'status')
-!  inquire(file=directory//'status/forward'//contribs,exist=forward(i))
-!  inquire(file=directory//'status/adjoint'//contribs,exist=adjoint(i))
-!  inquire(file=directory//'status/kernel'//contribs,exist=kernels(i))
-! enddo
+    ! do i=1,nmasters
+    !  call convert_to_string(i,contribs,2) 
+    !  inquire(file=directory//'status',exist=lexist)
+    !  if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'status')
+    !  inquire(file=directory//'status/forward'//contribs,exist=forward(i))
+    !  inquire(file=directory//'status/adjoint'//contribs,exist=adjoint(i))
+    !  inquire(file=directory//'status/kernel'//contribs,exist=kernels(i))
+    ! enddo
  
-if (lexist1) then
+    if (lexist1) then
 
- open(22, file = 'Instruction_'//contrib//'_'//jobno, form='formatted', status='unknown', action='read')
-!~  open(22, file = 'Instruction'//contrib, form='formatted', status='unknown', action='read')
-  read(22,"(A)") calculation_type
-!  read(22,"(A)") directory_rel
- ! read(22,"(A)") contrib 
+        open(22, file = 'Instruction_src'//contrib//'_ls'//jobno, form='formatted', status='unknown', action='read')
+        read(22,"(A)") calculation_type
+        !  read(22,"(A)") directory_rel
+        ! read(22,"(A)") contrib 
 
-  if (adjustl(trim(calculation_type)) == 'spectral') then
-    COMPUTE_ADJOINT = .FALSE.
-    GENERATE_WAVEFIELD = .TRUE.
-    COMPUTE_FORWARD = .TRUE.
-    !COMPUTE_SYNTH = .FALSE.
-    inquire(file='compute_synth',exist=COMPUTE_SYNTH)
-    !LINESEARCH = .FALSE.
-    inquire(file='linesearch',exist=LINESEARCH)
-    COMPUTE_DATA = .false.
-    inquire(file='compute_data', exist = COMPUTE_DATA)
-    !if (lexist) LINESEARCH = .TRUE.
-!    i = 1
-!    do while (forward(i) .and. (i .le. nmasters))
-! 	i = i+1
-!    enddo
-!    if (i .le. nmasters) then 
-!      call convert_to_string(i,contrib,2)
-!      call getarg(1, contrib) 
-      inquire(file=directory//'forward_src'//contrib//'_ls'//jobno,exist=lexist)
-      if (.not. lexist .and. (rank==0)) call system('mkdir '&
-                //directory//'forward_src'//contrib//'_ls'//jobno)
-!    elseif (i .gt. nmasters) then
-!      print *,'All forward calculations processed'
-!      stop
-!    endif
+        if (adjustl(trim(calculation_type)) == 'spectral') then
+            COMPUTE_ADJOINT = .FALSE.
+            GENERATE_WAVEFIELD = .TRUE.
+            COMPUTE_FORWARD = .TRUE.
+            inquire(file='compute_synth',exist=COMPUTE_SYNTH)
+            inquire(file='linesearch',exist=LINESEARCH)
+            inquire(file='compute_data', exist = COMPUTE_DATA)
+
+            inquire(file=directory//'forward_src'//contrib//'_ls'//jobno,exist=lexist)
+            if (.not. lexist .and. (rank==0)) call system('mkdir '&
+                    //directory//'forward_src'//contrib//'_ls'//jobno)
+
+             
+            directory_rel = directory//'forward_src'//contrib//'_ls'//jobno//'/'
+
+
+            timeline = -solartime * 3600.!timeline
+        endif
+
+
+
+        if (adjustl(trim(calculation_type)) == 'adjoint') then
+            COMPUTE_ADJOINT = .TRUE.
+
+            inquire(file=directory//'adjoint_src'//contrib,exist=lexist)
+            if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'adjoint_src'//contrib)
+
+            directory_rel = directory//'adjoint_src'//contrib//'/'
+
+            final_time = solartime*3600.
+            timeline = final_time - (forcing_length - 1.)*cadforcing_step*timestep
+
+        endif
+
+        read(22,*) whether_2D
+
+        if (whether_2D == '2D') TEST_IN_2D = .true.
+        if (generate_wavefield) read(22,*) initcond
+        close(22)
+
+
+    elseif (.not. lexist1) then
+
+        CONSTRUCT_KERNELS = .true.
      
-    directory_rel = directory//'forward_src'//contrib//'_ls'//jobno//'/'
+        inquire(file=directory//'kernel',exist=lexist)
+        if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'kernel')
+
+        directory_rel = directory//'kernel/'
+
+    endif
+
+    !if (.not. CONSTRUCT_KERNELS) then 
 
 
-    timeline = -solartime * 3600.!timeline
-  endif
+    !  if (rank==0) print *,'Reading information file: '//adjustl(trim(directory_rel))//'information'
+
+    !  open(44,file=adjustl(trim(directory_rel))//'information',form='formatted',status='unknown',position='rewind')
+
+     
+    !  read(44,*) forcing_length
+    !  read(44,*) timeline 
+    !  read(44,*) final_time
+      
+    !endif
+
+    if (test_in_2d) then
+        if (.not. magnetic) option = 17
+        if (magnetic) option = 18
+    endif
 
 
-
-  if (adjustl(trim(calculation_type)) == 'adjoint') then
-     COMPUTE_ADJOINT = .TRUE.
-     !i = 1
-
-!      call getarg(1, contrib) 
-!      do while (adjoint(i) .and. (i .le. nmasters))
-! 	i = i+1
-!     enddo
-!     if (i .le. nmasters) then
-!      call convert_to_string(i,contrib,2)
-      inquire(file=directory//'adjoint_src'//contrib,exist=lexist)
-      if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'adjoint_src'//contrib)
-!     elseif (i .gt. nmasters) then
-!      print *,'All adjoint calculations processed'
-!      stop
-!     endif
-     directory_rel = directory//'adjoint_src'//contrib//'/'
-
-     final_time = solartime*3600.
-     timeline = final_time - (forcing_length - 1.)*cadforcing_step*timestep
-
- endif
-
-  read(22,*) whether_2D
-
-
- if (whether_2D == '2D') TEST_IN_2D = .true.
-  if (generate_wavefield) read(22,*) initcond
- close(22)
-
-
-elseif (.not. lexist1) then
-
-  CONSTRUCT_KERNELS = .true.
- 
-
-!     i = 1
-!      do while (kernels(i) .and. (i .le. nmasters))
-! 	i = i+1
-!     enddo
-!     if (i .le. nmasters) then
-!      call convert_to_string(i,contrib,2)
-!      call getarg(1, contrib) 
-      inquire(file=directory//'kernel',exist=lexist)
-      if (.not. lexist .and. (rank==0)) call system('mkdir '//directory//'kernel')
-!     elseif (i .gt. nmasters) then
-!      print *,'All kernels computed'
-
-!stop
- !    endif
-     directory_rel = directory//'kernel/'
-
-endif
-
-!if (.not. CONSTRUCT_KERNELS) then 
-
-
-!  if (rank==0) print *,'Reading information file: '//adjustl(trim(directory_rel))//'information'
-
-!  open(44,file=adjustl(trim(directory_rel))//'information',form='formatted',status='unknown',position='rewind')
-
- 
-!  read(44,*) forcing_length
-!  read(44,*) timeline 
-!  read(44,*) final_time
-  
-!endif
-
- if (test_in_2d) then
-   if (.not. magnetic) option = 17
-   if (magnetic) option = 18
- endif
-
-
-deallocate(kernels, forward, adjoint)
+    deallocate(kernels, forward, adjoint)
 
 END SUBROUTINE READ_PARAMETERS
 

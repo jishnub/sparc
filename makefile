@@ -17,16 +17,24 @@ OBJS1=   driver.o        initialize.o    physics.o       dbyd2.o\
 
 OBJS2=	grad.o
 
-FC=	~/anaconda/bin/mpif90
-FC77=   ~/anaconda/bin/mpif77
+OBJS3=	dft.o
+OBJS4=	dft_fftw_example.o
+
+##FC=	~/anaconda/bin/mpif90
+FC=	mpif90
+FC77=   mpif77
+##FC77=   ~/anaconda/bin/mpif77
 FFLAGS= -O3 -DDOUBLE_PRECISION ##-p -g ##-check all ##-fpe0 -traceback -debug #-check bounds
 #INCLUDE= /opt/users/apps/intel/composer_xe_2015.2.164/mkl/include/fftw/fftw3.f
 LIBS1 = -L/home/jishnu/lib/fftw-3.3.4/lib -lfftw3 -L/home/jishnu/lib/cfitsio/lib -lcfitsio
+#LIBS1 = -lfftw3 -lcfitsio
 #LIBS1 =  -lfftw3 -lcfitsio
 LIBS2= -lcfitsio -L/home/jishnu/lib/fftw-3.3.4/lib -lfftw3
+LIBS4= -L/home/jishnu/lib/fftw-3.3.4/lib -lfftw3
 
 COMMAND1=	sparc
 COMMAND2=	grad
+COMMAND3=	dft
 
 
 $(COMMAND1): $(OBJS1) 
@@ -35,6 +43,9 @@ $(COMMAND1): $(OBJS1)
 
 $(COMMAND2): $(OBJS2) 
 	$(FC) -I $(INCLUDE) $(FFLAGS) -o $(COMMAND2) $(OBJS2) $(LIBS2) 
+
+$(COMMAND3): $(OBJS4) 
+	$(FC) -I $(INCLUDE) $(FFLAGS) -o $(COMMAND3) $(OBJS4) $(LIBS4) 
 
 %.o : %.f
 	$(FC77) $(FFLAGS) -c $< 
@@ -62,3 +73,4 @@ damping.o:	initialize.o
 process.i:	params.i
 kernels.o:	initialize.o	all_modules.o
 grad.o:		params.i
+dft.o:	params.i
