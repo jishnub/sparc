@@ -377,7 +377,7 @@ PROGRAM CONJGRAD
   
     !eps = 1.5e-2
     !eps = 3e-3
-    eps = 1e-7
+    eps = 1e-4
     !~    eps=6e-4
     open(7,file = file_data,form = 'formatted',status = 'old')
     

@@ -5,7 +5,14 @@ env=dict(os.environ, MPI_TYPE_MAX="1280280")
 
 HOME=os.environ['HOME']
 codedir=os.path.join(HOME,"sparc")
-datadir="/scratch/jishnu/magnetic/data"
+
+configvars={}
+with open(os.path.join(codedir,"varlist.sh")) as myfile:
+    for line in myfile:
+        name,var=line.partition("=")[::2]
+        configvars[name.strip()]=var.strip().strip('"')
+
+datadir=configvars['directory']
 
 procno=int(os.environ["PBS_VNODENUM"])
 
@@ -43,6 +50,8 @@ def compute_data(src):
         shutil.move(os.path.join(datadir,forward,"vz_cc.fits"),os.path.join(datadir,forward,"data.fits"))
         shutil.copyfile(os.path.join(datadir,forward,"data.fits"),os.path.join(datadir,"tt","data","data"+src+".fits"))
         shutil.copyfile(os.path.join(datadir,forward,"data.fits"),os.path.join(datadir,"data",src+".fits"))
+    else:
+        print "vz_cc.fits not found. Check the forward calculation"
 
 compute_data(src)
 

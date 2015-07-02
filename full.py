@@ -4,7 +4,14 @@ env=dict(os.environ, MPI_TYPE_MAX="1280280")
 
 HOME=os.environ['HOME']
 codedir=os.path.join(HOME,"sparc")
-data="/scratch/jishnu/magnetic/data"
+
+configvars={}
+with open(os.path.join(codedir,"varlist.sh")) as myfile:
+    for line in myfile:
+        name,var=line.partition("=")[::2]
+        configvars[name.strip()]=var.strip().strip('"')
+        
+data=configvars['directory']
 
 iterno=len([f for f in os.listdir(os.path.join(data,'update')) if re.match(r'misfit_[0-9]{2}$',f)])
 itername=str(iterno).zfill(2)
@@ -17,6 +24,12 @@ procno=int(os.environ["PBS_VNODENUM"])
 if procno>=nmasterpixels: quit()
 
 src=str(procno+1).zfill(2)
+
+def copyfile(pathA,pathB):
+    try:
+        shutil.copyfile(pathA,pathB)
+    except IOError:
+        print "Error copying",pathA        
 
 def compute_forward_adjoint_kernel(src):
 
@@ -35,40 +48,40 @@ def compute_forward_adjoint_kernel(src):
     mpipath=os.path.join(HOME,"anaconda/bin/mpiexec")
     sparccmd=mpipath+" -np 1 ./sparc "+src+" 00"
     
+    def inforward(filename): return os.path.join(data,forward,filename)
+    def indata(filename): return os.path.join(data,filename)
+    def inttiter(filename): return os.path.join(data,"tt","iter"+itername,filename)
+    
     ####################################################################
     #~ Forward
     ####################################################################
     
     if not os.path.exists(os.path.join(data,"status",forward)):
 
-        shutil.copyfile(Spectral,Instruction)
+        copyfile(Spectral,Instruction)
 
-        with open(os.path.join(data,forward,"out"+forward),'w') as outfile:
+        with open(inforward("out_"+forward),'w') as outfile:
             fwd=subprocess.call(sparccmd.split(),stdout=outfile,env=env,cwd=codedir)
         
         if not os.path.exists(os.path.join(data,"tt","iter"+itername)):
             os.makedirs(os.path.join(data,"tt","iter"+itername))
-            
-        shutil.copyfile(os.path.join(data,forward,"vz_cc.fits"),
-                        os.path.join(data,"tt","iter"+itername,ttname))
                         
-        shutil.copyfile(os.path.join(data,forward,"vz_cc.fits"),
-                        os.path.join(data,forward,"vz_cc_00.fits"))
+        copyfile(inforward("vz_cc.fits"),inforward("vz_cc_00.fits"))
+        
+        copyfile(inforward("vz_cc.fits"),inttiter(ttname))
                         
-        shutil.copyfile(os.path.join(data,forward,"ttdiff.0"),
-                        os.path.join(data,"tt","iter"+itername,tdiff0name))
+        copyfile(inforward("ttdiff.0"),inttiter(tdiff0name))
                         
-        shutil.copyfile(os.path.join(data,forward,"ttdiff.1"),
-                        os.path.join(data,"tt","iter"+itername,tdiff1name))
+        copyfile(inforward("ttdiff.1"),inttiter(tdiff1name))
     
     ####################################################################
     #~ Adjoint
     ####################################################################
 
     if not os.path.exists(os.path.join(data,"status",adjoint)):
-        shutil.copyfile(Adjoint,Instruction)
+        copyfile(Adjoint,Instruction)
 
-        with open(os.path.join(data,adjoint,"out"+adjoint),'w') as outfile:
+        with open(os.path.join(data,adjoint,"out_"+adjoint),'w') as outfile:
             adj=subprocess.call(sparccmd.split(),stdout=outfile,env=env,cwd=codedir)
             
     ####################################################################

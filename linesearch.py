@@ -4,7 +4,14 @@ env=dict(os.environ, MPI_TYPE_MAX="1280280")
 
 HOME=os.environ['HOME']
 codedir=os.path.join(HOME,"sparc")
-data="/scratch/jishnu/magnetic/data"
+
+configvars={}
+with open(os.path.join(codedir,"varlist.sh")) as myfile:
+    for line in myfile:
+        name,var=line.partition("=")[::2]
+        configvars[name.strip()]=var.strip().strip('"')
+        
+data=configvars['directory']
 
 procno=int(env["PBS_VNODENUM"])
 nodeno=int(env["PBS_NODENUM"])

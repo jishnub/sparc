@@ -1,15 +1,17 @@
 #!/bin/bash
 #PBS -N  full
-#PBS -l nodes=1:ppn=24
+#PBS -l nodes=1:ppn=8
 #PBS -o  output-full
 #PBS -e  error-full
 #PBS -l walltime=12:00:00
 cd $PBS_O_WORKDIR
 echo $PBS_JOBID
 export TERM=xterm
+export MPI_TYPE_MAX=1280280
 
+source varlist.sh
+#directory="/scratch/jishnu/magnetic/data"
 echo "Starting at "`date`
-directory="/scratch/jishnu/magnetic/data"
 
 find $directory -name "linesearch" -exec rm -f {} \; 
 find $directory -name "compute_data" -exec rm -f {} \; 
@@ -18,7 +20,7 @@ find $directory -name "compute_synth" -exec rm -f {} \;
 iter=`find $directory/update -name 'misfit_[0-9][0-9]'|wc -l`
 itername=`printf "%02d" $iter`
 
-/usr/local/bin/pbsdsh python $PBS_O_WORKDIR/full.py
+pbsdsh python $PBS_O_WORKDIR/full.py
 
 find $directory/status -name "forward*" -exec rm -f {} \;
 find $directory/status -name "adjoint*" -exec rm -f {} \;

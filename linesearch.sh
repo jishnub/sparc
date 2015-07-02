@@ -7,10 +7,8 @@
 cd $PBS_O_WORKDIR
 echo $PBS_JOBID
 export TERM=xterm
-
-
-
-directory="/scratch/jishnu/magnetic/data"
+export MPI_TYPE_MAX=1280280
+source varlist.sh
 
 find $directory -name "linesearch" -exec rm -f {} \; 
 find $directory -name "compute_data" -exec rm -f {} \; 

@@ -116,8 +116,10 @@ SUBROUTINE PRODUCE_KERNELS
      print *,"Max value of Bz",maxval(abs(boz))
      deallocate(psivar)
    
-     call readfits(dirbacktrue//'pressure2D.fits',p0,nz)
-     call readfits(dirbacktrue//'density2D.fits',rho0,nz)
+!~      call readfits(dirbacktrue//'pressure2D.fits',p0,nz)
+!~      call readfits(dirbacktrue//'density2D.fits',rho0,nz)
+     call readfits(dirbackmag//'pressure2D.fits',p0,nz)
+     call readfits(dirbackmag//'density2D.fits',rho0,nz)
 
 !     call readfits(dirbackmag//'B_x2D.fits', temp, nz)
 !     call readfits(dirbackmag//'B_z2D.fits', temp, nz)

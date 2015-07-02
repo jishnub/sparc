@@ -1082,10 +1082,10 @@ SUBROUTINE FMODE_FILTER(nt, fmode)
  
   dt = outputcad
 
-  Poly(0)=0.0010
-  Poly(1)=0.0030
-  Poly(2)=-0.0006
-  f_mode_const=0.00293795
+  Poly(0)=1.0
+  Poly(1)=3.0
+  Poly(2)=-0.6
+  f_mode_const=2.056565
 
   df = 0.5
   f_low = 1.1
@@ -1095,10 +1095,8 @@ SUBROUTINE FMODE_FILTER(nt, fmode)
   k = abs(k) * 2.*pi/(xlength*10.**(-8.)*nx/(nx-1.))
   w = abs(w) * 2.*pi/(nt*dt)
 
-!~   f0=0.8*(254e-6*abs(k))**0.5/(2*pi)*1e3
-  f0=0.7*f_mode_const*k**0.5*1e3
-  f1=(Poly(0) + Poly(1)*k +Poly(2)*k**2.)*1e3
-!~   f1=1.2*f_mode_const*k**0.5*1e3
+  f0=f_mode_const*k**0.5
+  f1=Poly(0) + Poly(1)*k +Poly(2)*k**2.
   f = w/(2.*pi)*1e3
 
   
@@ -1107,10 +1105,8 @@ SUBROUTINE FMODE_FILTER(nt, fmode)
    delta = (f1(i) - f0(i))
     do j=1,nt
      d = f(j) - f0(i)
-!~      if (abs(d) .gt. delta) fmode(i,1,j) = 0.    
-!~      if (abs(d) .lt. delta) fmode(i,1,j) = 1.    
      if ((d .lt. delta) .and. (d>0)) &
-        fmode(i,1,j) = 0.5*(1.+cos(pi*(abs(d)-abs(delta)*0.5)/(abs(delta)*0.5)))
+        fmode(i,1,j) = 0.5*(1.+cos(pi*(2.0*d/delta-1)))
     enddo
    enddo 
    
@@ -1185,13 +1181,12 @@ SUBROUTINE PMODE_FILTER(nt, pmode)
 
   open (unit=32,file="filter.txt",action="write",status="replace")
   dt = outputcad
-!~   f_mode_const=0.00293795 ! Quiet sun value
-  f_mode_const=0.0033
 
-  Poly(0)=0.0011
-  Poly(1)=0.0052
-!~   Poly(2)=-0.0016 ! Quiet sun value
-  Poly(2)=-0.0013
+  f_mode_const=3.96
+
+  Poly(0)=1.1
+  Poly(1)=5.2
+  Poly(2)=-1.3
 
   df = 0.5
   f_low = 1.6
@@ -1201,8 +1196,8 @@ SUBROUTINE PMODE_FILTER(nt, pmode)
   k = abs(k) * 2.*pi/(xlength*10.**(-8.)*nx/(nx-1.))
   w = abs(w) * 2.*pi/(nt*dt)
   
-  f0=1.2*f_mode_const*abs(k)**0.5*1e3
-  f1=(Poly(0) + Poly(1)*k +Poly(2)*k**2.)*1e3
+  f0=f_mode_const*abs(k)**0.5
+  f1=Poly(0) + Poly(1)*k +Poly(2)*k**2.
   f = w/(2.*pi)*1e3
   
   pmode = 0.0
@@ -1211,7 +1206,7 @@ SUBROUTINE PMODE_FILTER(nt, pmode)
     do j=1,nt
      d = f(j) - f0(i)
      if ((d .lt. delta) .and. (d .gt. 0)) then
-        pmode(i,1,j) = 0.5*(1.+cos(pi*(abs(d)-abs(delta)*0.5)/(abs(delta)*0.5)))
+        pmode(i,1,j) = 0.5*(1.+cos(pi*(2.0*d/delta-1)))
      end if   
     enddo
    enddo 

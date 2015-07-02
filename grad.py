@@ -22,10 +22,12 @@ def fitswrite(f,arr):
         warnings.simplefilter('ignore')
         # Change dimensions from (nx,ny,nz) to (nz,ny,nx)
         arr=arr.transpose(2,1,0)
+        # clobber=True rewrites a pre-existing file
         pyfits.writeto(f,arr,clobber=True)
 
 def get_iter_no():
     updatedir=os.path.join(datadir,"update")
+    # Count the number of misfit_xx files
     return len(fnmatch.filter(os.listdir(updatedir),'misfit_[0-9][0-9]'))
     
 def check_BFGS_stencil(iterno,stencilBFGS):
@@ -35,20 +37,25 @@ def check_BFGS_stencil(iterno,stencilBFGS):
         quit()
 
 def get_number_of_sources():
-    return len(np.loadtxt(os.path.join(datadir,'master.pixels')))
+    # Count the number of lines in master.pixels
+    # Safest to use loadtxt, since it removes newline correctly
+    return len(np.loadtxt(os.path.join(datadir,'master.pixels'),ndmin=1))
 
 def filterx(kern):
     temp=np.zeros_like(kern)
     nx,ny,nz=kern.shape
+    
     x=np.fft.fftfreq(nx)*nx
     smooth_x = 4
     x = np.exp(-x**2./(2.*smooth_x**2.))
+    
     filtx=np.fft.rfft(x)
     filtx=np.atleast_3d(filtx).transpose(1,0,2)
+    
     temp=np.fft.rfft(kern,axis=0)
     temp*=filtx
     temp=np.fft.irfft(temp,axis=0).real
-    #temp=temp*nx*ny*nz # Remove if not comparing with fortran
+    
     kern[:]=temp[:]
 
 def filterz(arr,algo='spline',sp=1.0):
@@ -113,17 +120,32 @@ def rms(arr): return np.sqrt(np.sum(arr**2)/np.prod(arr.shape))
 
 Rsun=695.9895 # Mm
     
-datadir="/scratch/jishnu/magnetic/data"
+HOME=os.environ['HOME']
+codedir=os.path.join(HOME,"sparc")
+configvars={}
+with open(os.path.join(codedir,"varlist.sh")) as myfile:
+    for line in myfile:
+        name,var=line.partition("=")[::2]
+        configvars[name.strip()]=var.strip().strip('"')
 
+datadir=configvars['directory']
+
+#~ Decide on algorithm
 steepest_descent = True
 conjugate_gradient=True and not steepest_descent
 LBFGS = True and not (steepest_descent or conjugate_gradient)
 
-nx,ny,nz=256,1,300
 
+
+#~ Arbitrarily chosen maximum number of iterations. Hope we get to 5
 itermax=25
 
+#~ Get shape from a pre-existing file
+kern=fitsread(os.path.join(datadir,'kernel','kernel_c_01.fits'))
+nx,ny,nz=kern.shape
+
 iterno=get_iter_no()
+
 back=np.loadtxt('polytrope')
 
 num_src=get_number_of_sources()
@@ -133,27 +155,28 @@ totkern_c=np.zeros(array_shape)
 totkern_psi=np.zeros(array_shape)
 hess=np.zeros(array_shape)
 
+# Read in kernels
 for src in xrange(1,num_src+1):
     
-    kern=fitsread(os.path.join(datadir,'kernel','kernel_c_'+twodigit(src)+'.fits'))
-    totkern_c+=kern
+    totkern_c+=fitsread(os.path.join(datadir,'kernel','kernel_c_'+twodigit(src)+'.fits'))
     
-    kern=fitsread(os.path.join(datadir,'kernel','kernel_vectorpsi_'+twodigit(src)+'.fits'))
-    totkern_psi+=kern
+    totkern_psi+=fitsread(os.path.join(datadir,'kernel','kernel_vectorpsi_'+twodigit(src)+'.fits'))
     
-    kern=fitsread(os.path.join(datadir,'kernel','hessian_'+twodigit(src)+'.fits'))
-    hess+=abs(kern)
+    hess+=abs(fitsread(os.path.join(datadir,'kernel','hessian_'+twodigit(src)+'.fits')))
+
 
 hess=hess*np.atleast_3d(back[:,2]).transpose(0,2,1)
-hess = hess/abs(hess).max()
+hess = hess/hess.max()
 hess[hess<5e-3]=5e-3
 
+
+#~ Sound speed kernel
 kern = totkern_c/hess
 filterx(kern)
 filterz(kern,algo='smooth',sp=0.3)
 totkern_c=kern
 
-
+#~ Vector potential/stream function kernel
 kern = totkern_psi/hess
 filterx(kern)
 antisymmetrize(kern)
@@ -163,8 +186,14 @@ totkern_psi=kern
 fitswrite(updatedir('gradient_c_'+iterminus(1)+'.fits'),totkern_c)
 fitswrite(updatedir('gradient_vectorpsi_'+iterminus(1)+'.fits'),totkern_psi)
 
+model_c_exists=True
+
+#~ Get update direction based on algorithm of choice
 if (iterno==1) or steepest_descent:
-    lastmodel_c=fitsread(updatedir('model_c_'+iterminus(1)+'.fits'))
+    try:
+        lastmodel_c=fitsread(updatedir('model_c_'+iterminus(1)+'.fits'))
+    except IOError: model_c_exists=False
+        
     lastmodel_psi=fitsread(updatedir('model_vectorpsi_'+iterminus(1)+'.fits'))
     
     fitswrite(updatedir('update_c_'+iterminus(1)+'.fits'),totkern_c)
@@ -176,7 +205,10 @@ if (iterno==1) or steepest_descent:
     if (iterno > 1): print 'Forcing steepest descent'
 
 elif (iterno>1 and conjugate_gradient):
-    lastmodel_c=fitsread(updatedir('model_c_'+iterminus(1)+'.fits'))
+    try:
+        lastmodel_c=fitsread(updatedir('model_c_'+iterminus(1)+'.fits'))
+    except IOError: model_c_exists=False
+    
     lastmodel_psi=fitsread(updatedir('model_vectorpsi_'+iterminus(1)+'.fits'))
     
     grad_psi=fitsread(updatedir('gradient_vectorpsi_'+iterminus(1)+'.fits'))
@@ -188,7 +220,7 @@ elif (iterno>1 and conjugate_gradient):
     lastupdate_c=fitsread(updatedir('update_c_'+iterminus(2)+'.fits'))
     
     con = np.sum(grad_psi*(grad_psi - lastgrad_psi))
-    den = sum(lastgrad_psi**2.)
+    den = np.sum(lastgrad_psi**2.)
     con=con/den
     den=con
     if con<0: con=0
@@ -208,49 +240,59 @@ elif (iterno>1 and LBFGS):
     
     alph=np.zeros(iteration)
     
-    model=fitsread(updatedir('model_c_'+iterminus(1)+'.fits'))
+    try:
+        model=fitsread(updatedir('model_c_'+iterminus(1)+'.fits'))
+    except: model_c_exists=False
+    
     grad_c=fitsread(updatedir('gradient_c_'+iterminus(1)+'.fits'))
     update_c=grad_c
     
-    for i in xrange(iterno-2,minBFGS-1,-1):
+    if model_c_exists:
+        for i in xrange(iterno-2,minBFGS-1,-1):
+            
+            previterind=twodigit(i)
+            try:
+                lastmodel=fitsread(updatedir('model_c_'+previterind+'.fits'))
+            except IOError: model_c_exists=False
+            
+            lastgrad_c=fitsread(updatedir('gradient_c_'+previterind+'.fits'))
+            
+            alph[i] = np.sum((model-lastmodel)*update_c) /np.sum((model-lastmodel)*(grad_c-lastgrad_c))
+            update_c = update_c - alph[i] * (grad_c - lastgrad_c) 
+            
+            model = lastmodel
+            grad_c = lastgrad_c
+            
+            
+        lastmodel=fitsread(updatedir('model_c_'+twodigit(minBFGS-1)+'.fits'))
+        lastgrad_c=fitsread(updatedir('gradient_c_'+twodigit(minBFGS-1)+'.fits'))
         
-        previterind=twodigit(i)
-        lastmodel=fitsread(updatedir('model_c_'+previterind+'.fits'))
-        lastgrad_c=fitsread(updatedir('gradient_c_'+previterind+'.fits'))
-        
-        alph[i] = np.sum((model-lastmodel)*update_c) /np.sum((model-lastmodel)*(grad_c-lastgrad_c))
-        update_c = update_c - alph[i] * (grad_c - lastgrad_c) 
-        
-        model = lastmodel
-        grad_c = lastgrad_c
-        
-        
-    lastmodel=fitsread(updatedir('model_c_'+twodigit(minBFGS-1)+'.fits'))
-    lastgrad_c=fitsread(updatedir('gradient_c_'+twodigit(minBFGS-1)+'.fits'))
-    
-    for i in xrange(minBFGS,iterno-1):
-        model=fitsread(updatedir('model_c_'+twodigit(i)+'.fits'))
-        grad_c=fitsread(updatedir('gradient_c_'+twodigit(i)+'.fits'))
-        
-        alph[i] = alph[i] - sum((grad_c-lastgrad_c)*update_c) /sum((model-lastmodel)*(grad_c-lastgrad_c))
-        update_c = update_c + alph[i] * (model - lastmodel) 
+        for i in xrange(minBFGS,iterno-1):
+            model=fitsread(updatedir('model_c_'+twodigit(i)+'.fits'))
+            grad_c=fitsread(updatedir('gradient_c_'+twodigit(i)+'.fits'))
+            
+            alph[i] = alph[i] - np.sum((grad_c-lastgrad_c)*update_c) /np.sum((model-lastmodel)*(grad_c-lastgrad_c))
+            update_c = update_c + alph[i] * (model - lastmodel) 
 
 
-        lastmodel = model
-        lastgradc = gradc
-        
+            lastmodel = model
+            lastgradc = gradc
+
+
+#~ Create new models to be used for linesearch
 psimax = abs(update_psi).max()
 
-update_c = update_c/psimax 
+#~ update_c = update_c/psimax #Muted, since c is not being updated right now
 update_psi = update_psi/psimax 
 
-eps = 1e-4
+eps = 1e-7
 
 psi_scale=rms(lastmodel_psi)
 
 for i in xrange(1,6):
-    update = lastmodel_c
-    fitswrite(updatedir('test_c_'+str(i)+'.fits'), update)
+    if model_c_exists:
+        update = lastmodel_c
+        fitswrite(updatedir('test_c_'+str(i)+'.fits'), update)
     
     update = lastmodel_psi + eps * i * psi_scale * update_psi
     fitswrite(updatedir('test_vectorpsi_'+str(i)+'.fits'), update)
