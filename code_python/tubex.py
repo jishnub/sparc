@@ -1,92 +1,88 @@
 from __future__ import division
 import numpy as np
-import math
-import sys
+import sys,os
 import plotc
 import pyfits
+import deriv6ord,fftcalculus as fc
+import warnings
 
-def derivx(eyekx2D,arrxz):
-    darrxz=np.fft.fft(bz,axis=0)
-    darrxz*=eyekx2D
-    darrxz=np.real(np.fft.ifft(darrxz,axis=0))
-    return darrxz
+Rsun=695.9894
+zeroB=True
 
-def derivz(z,arrxz):
-    darrxz=np.gradient(arrxz)[1]
-    dz=np.gradient(z)
-    return darrxz/dz
+def derivx(arrxz): return fc.differentiate(arrxz,axis=0,period=Lx)
 
-modelp = np.loadtxt('polytrope')
+def derivz(arrxz):
+    darr=np.asfortranarray(np.zeros(arrxz.shape,dtype=float))
+    deriv6ord.dbyd2(darr,arrxz,ibc=1)
+    return darr/dz
+
+codedir=os.path.join(os.environ['HOME'],"sparc")
+modelp = np.loadtxt(os.path.join(codedir,'polytrope'))
+user=os.environ['USER']
+modeldir=os.path.join('/scratch',user,'magnetic')
+
 nx = 256
 Lx = 400
-cutoff = math.floor(nx/3)
+cutoff = np.floor(nx/3)
 x = np.linspace(-Lx/2,Lx/2,num=nx,endpoint=False)
-dx=x[1]-x[0]
-x2D=np.atleast_2d(x).T
-kx = np.fft.fftfreq(nx,dx)*2*np.pi
-eyekx = 1j*kx;
-eyekx2D = np.atleast_2d(eyekx).T
-z = (modelp[:,0]-1.)*695.9894;
-zfull=z;
-zmin = -5.2;
-zmax = z.max();
-#~ nz1 = np.argmin(abs(z-zmin))
-nz1=0
-nz2 = len(z)
-nz = nz2-nz1
-z = z[nz1:nz2]
-p0 = modelp[nz1:nz2,3]
-rho0 = modelp[nz1:nz2,2]
-c2 = modelp[nz1:nz2,1]**2
-print c2.shape
-#~ grav = modelp[nz1:nz2,3];
+
+
+z = (modelp[:,0]-1.)*Rsun;
+nz=z.shape[0]
+z2d=np.asfortranarray(np.atleast_2d(z))
+dz2d=np.asfortranarray(np.zeros_like(z2d))
+deriv6ord.dbyd2(dz2d,z2d,ibc=1)
+dz=np.squeeze(dz2d)
+
+p0 = modelp[:,3]
+rho0 = modelp[:,2]
+c2 = modelp[:,1]**2
 
 grav=2.775e4
 convert = 1e8
 
-zcut = nz-1
-sigma = 8. + 14./(1. + np.exp((z[zcut]-z)/5))
-sigma2D=np.atleast_2d(sigma)
 
-psi = np.zeros((nx,nz))
-temp = np.exp(np.polyval(np.polyfit(z,np.log(p0),3),z));
-temp2D = np.atleast_2d(temp)
-p0fn= np.polyfit(z,p0,4)
-zpts= np.arange(-5,0)
-p0pts=np.polyval(p0fn,zpts)
-p0pts[1]=6.5e+7
-p0pts[0]=6e+7
-coeff=np.polyfit(zpts,p0pts,4)
 
-bz=temp2D**0.5*(1/(1. + np.exp((x2D-sigma2D)/2.5)) -1/(1.+ np.exp((x2D+sigma2D)/2.5)))
-fluxes=np.atleast_2d(np.sum(bz,axis=0)*dx)
-bz/=fluxes
+A0=5000
+decay_x=10;decay_z=10;
 
-normalization = 500/bz[:,zcut].max()
-bz*=normalization
+fx=-(x/decay_x)/(1+(x/decay_x)**4)
+dfx=-decay_x**3*(decay_x**4-3*x**4)/(decay_x**4+x**4)**2
+gz=np.exp(z/decay_z)
+dgz=1/decay_z*gz
 
-psi=-np.fft.fft(bz,axis=0)
-psi[0]=0 
-psi[1:]/=eyekx2D[1:]
-psi=np.real(np.fft.ifft(psi,axis=0))
 
-dzbz=derivz(z,bz);
-dzbz=dzbz[:,zcut];
-bx = derivz(z,psi);
+bx=-A0*np.atleast_2d(fx).T*dgz
+bz=A0*np.atleast_2d(dfx).T*gz
 
-force = -derivx(eyekx2D,bz)+ derivz(z,bx);
+A_true=A0*np.atleast_2d(fx).T*gz
+
+decay_z_start=12
+gz_start = np.exp(z/decay_z_start)
+A_start=A0*np.atleast_2d(fx).T*gz_start
+
+bx_start=-derivz(A_start)
+bz_start=fc.differentiate(A_start,axis=0,period=Lx)
+
+if zeroB:
+    bx=np.zeros_like(bx)
+    bz=np.zeros_like(bz)
+    bx_start=np.zeros_like(bx)
+    bz_start=np.zeros_like(bx)
+    A_start=np.zeros_like(A_start)
+    A_true=np.zeros_like(A_true)
+
+force = derivz(bx)-derivx(bz);
 
 hz = bx*force;
 hx = bz*force;
 
-p=np.fft.fft(hx,axis=0)
-p[0]=0 
-p[1:]/=eyekx2D[1:]
-p=np.real(np.fft.ifft(p,axis=0))
+p=fc.integrate(hx,axis=0,period=Lx)
+
 p-= p[0] - p0
 
 
-dzp = derivz(z,p);
+dzp = derivz(p);
 
 dp = p/p0 - 1
 
@@ -94,52 +90,71 @@ if dp.min() < -1 :
     print "Negative pressure"
     sys.exit(0)
 
-
 rho = -(hz + dzp)/(grav*convert);
 rho-=rho[0]- rho0
 drho=rho/rho0-1
 
 
-
 if drho.min() < -1 :
     print "Negative density"
     sys.exit(0)
-    
 
 
 soundspeed_squared=c2*rho0/p0*p/rho # This works even if c2 etc are 1D, since x is the leading dimension and multiplication is along z
-soundspeed=np.sqrt(c2mod)
+soundspeed=np.sqrt(soundspeed_squared)
 alfven_speed=np.sqrt((bx**2+bz**2)/rho)
 alf_c_ratio=alfven_speed/soundspeed
 
-plotc.colorplot(dp.T,x=x,y=z,title="Relative Pressure Difference",sp=121,
-                ylim=[-2.5,-0.39],
-                axes_properties=dict(xlabel="x",ylabel="z",
-                locator_properties_x=dict(nbins=4),
-                locator_properties_y=dict(nbins=5)),
-                colorbar_properties=dict(orientation='horizontal',
-                ticks=[-0.25*i for i in xrange(1,4)],shrink=0.9))
-#~ 
-plotc.colorplot(drho.T,x=x,y=z,title="Relative Density Difference",sp=122,
-                ylim=[-2.5,-0.39],
-                axes_properties=dict(xlabel="x",
-                locator_properties_x=dict(nbins=4),
-                locator_properties_y=dict(nbins=5),
-                hide_yticklabels=True),
-                centerzero=True,
-                colorbar_properties=dict(orientation='horizontal',shrink=0.9))
-
-plotc.plt.subplots_adjust(wspace=0)
-
 plotc.plt.figure()
+plotc.colorplot(bz.T*np.sqrt(4*np.pi),y=z,x=x,sp=221,title="Bz true")
+plotc.colorplot(bz_start.T*np.sqrt(4*np.pi),y=z,x=x,sp=222,title="Bz start")
+plotc.colorplot(bx.T*np.sqrt(4*np.pi),y=z,x=x,sp=223,title="Bx true")
+plotc.colorplot(bx_start.T*np.sqrt(4*np.pi),y=z,x=x,sp=224,title="Bx start")
 
-plotc.quiver2D(bx.T,bz.T,x=x,y=z,every=[2,15],xr=[-50,50])
-plotc.plt.show()
 
-pyfits.writeto('true/B_z2D.fits',bx.T*np.sqrt(4*np.pi))
-pyfits.writeto('true/B_x2D.fits',bx.T*np.sqrt(4*np.pi))
-pyfits.writeto('true/pressure2D.fits',p.T)
-pyfits.writeto('true/density2D',rho.T)
-pyfits.writeto('true/soundspeed2D',soundspeed.T)
+#~ plotc.plt.figure()
+#~ plotc.colorplot(dp.T,x=x,y=z,title="Relative Pressure Difference",sp=121,
+                #~ ylim=[-2.5,-0.39],
+                #~ axes_properties=dict(xlabel="x",ylabel="z",
+                #~ locator_properties_x=dict(nbins=4),
+                #~ locator_properties_y=dict(nbins=5)),
+                #~ colorbar_properties=dict(orientation='horizontal'
+                #~ ,shrink=0.9))
+#~ 
+#~ plotc.colorplot(drho.T,x=x,y=z,title="Relative Density Difference",sp=122,
+                #~ ylim=[-2.5,-0.39],
+                #~ axes_properties=dict(xlabel="x",
+                #~ locator_properties_x=dict(nbins=4),
+                #~ locator_properties_y=dict(nbins=5),
+                #~ hide_yticklabels=True),
+                #~ centerzero=True,
+                #~ colorbar_properties=dict(orientation='horizontal',shrink=0.9))
+#~ 
+#~ plotc.plt.subplots_adjust(wspace=0)
+
+#~ plotc.plt.figure()
+
+#~ plotc.quiver2D(bx.T,bz.T,x=x,y=z,every=[2,15],xr=[-50,50],scale=5000,key=True)
+#~ plotc.plt.show()
+
+write_models=True
+
+if write_models:
+    if not os.path.exists(os.path.join(modeldir,'true')): os.makedirs(os.path.join(modeldir,'true'))
+    if not os.path.exists(os.path.join(modeldir,'start')): os.makedirs(os.path.join(modeldir,'start'))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        pyfits.writeto(os.path.join(modeldir,'true','B_z2D.fits'),bz.T*np.sqrt(4*np.pi),clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'true','B_x2D.fits'),bx.T*np.sqrt(4*np.pi),clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'true','true_vectorpsi.fits'),A_true.T*np.sqrt(4*np.pi)/Rsun,clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'start','model_vectorpsi_ls00.fits'),A_start.T*np.sqrt(4*np.pi)/Rsun,clobber=True)
+        
+        pyfits.writeto(os.path.join(modeldir,'true','pressure2D.fits'),p.T,clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'start','pressure2D.fits'),p.T,clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'true','density2D.fits'),rho.T,clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'start','density2D.fits'),rho.T,clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'true','soundspeed2D.fits'),soundspeed.T,clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'start','soundspeed2D.fits'),soundspeed.T,clobber=True)
+        pyfits.writeto(os.path.join(modeldir,'start','model_c_ls00.fits'),soundspeed.T,clobber=True)
 
 

@@ -120,8 +120,7 @@ def rms(arr): return np.sqrt(np.sum(arr**2)/np.prod(arr.shape))
 
 Rsun=695.9895 # Mm
     
-HOME=os.environ['HOME']
-codedir=os.path.join(HOME,"sparc")
+codedir=os.path.dirname(os.path.abspath(__file__))
 configvars={}
 with open(os.path.join(codedir,"varlist.sh")) as myfile:
     for line in myfile:
@@ -286,13 +285,17 @@ psimax = abs(update_psi).max()
 update_psi = update_psi/psimax 
 
 eps = 1e-7
+#~ eps = 0.6e-4
+#~ eps = 1e-7
 
 psi_scale=rms(lastmodel_psi)
 
 for i in xrange(1,6):
     if model_c_exists:
+        #~ update = lastmodel_c*(1+eps*i*update_psi)
         update = lastmodel_c
         fitswrite(updatedir('test_c_'+str(i)+'.fits'), update)
     
     update = lastmodel_psi + eps * i * psi_scale * update_psi
+    #~ update = lastmodel_psi
     fitswrite(updatedir('test_vectorpsi_'+str(i)+'.fits'), update)

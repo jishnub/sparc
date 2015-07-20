@@ -2,8 +2,8 @@ import os,sys,shutil,glob,time,re,subprocess
 
 env=dict(os.environ, MPI_TYPE_MAX="1280280")
 
-HOME=os.environ['HOME']
-codedir=os.path.join(HOME,"sparc")
+codedir=os.path.dirname(os.path.abspath(__file__))
+HOME=os.environ["HOME"]
 
 configvars={}
 with open(os.path.join(codedir,"varlist.sh")) as myfile:

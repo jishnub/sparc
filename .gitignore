@@ -7,3 +7,4 @@ grad
 /*.fits
 source.txt
 filter.txt
+*.so

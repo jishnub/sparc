@@ -10,9 +10,8 @@ export TERM=xterm
 export MPI_TYPE_MAX=1280280
 source varlist.sh
 
-find $directory -name "linesearch" -exec rm -f {} \; 
-find $directory -name "compute_data" -exec rm -f {} \; 
-find $directory -name "compute_synth" -exec rm -f {} \; 
+find . -name "compute_data" -exec rm -f {} \; 
+find . -name "compute_synth" -exec rm -f {} \; 
 
 iter=`find $directory/update -name 'linesearch_[0-9][0-9]'|wc -l`
 itername=`printf "%02d" $iter`

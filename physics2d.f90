@@ -113,6 +113,8 @@ Contains
             call readfits(dirbacktrue//'pressure2D.fits',p0,nz)
             call readfits(dirbacktrue//'density2D.fits',rho0,nz)
             call readfits(dirbacktrue//'soundspeed2D.fits',c_speed,nz)
+            
+            print *,"Magnetic field strength ",maxval(box),maxval(boz)
 
         elseif (kernel_mode .and. (.not. compute_data)) then
 
@@ -124,7 +126,7 @@ Contains
                 allocate(psivar(nx,dim2(rank),nz))
                 call readfits(directory//'model_vectorpsi_ls'//jobno//'.fits',psivar,nz)
 
-                call ddz(psivar, box, 0)
+                call ddz(psivar, box, 1)
                 !call dbyd2(box,psivar,nx,dim2(rank)*nz,1)
                 box = -box
                 !box(:,1,nz-1) = 0.5*(box(:,1,nz) + box(:,1,nz-2))
@@ -776,7 +778,7 @@ SUBROUTINE MP_MHD_PML_2D_DISPL
  !stop
  bc =0
  call ddx(p, gradp_x, 0) 
- call ddz(p, gradp_z, 0)
+ call ddz(p, gradp_z, 2)
 
 
  pmlindex = 0

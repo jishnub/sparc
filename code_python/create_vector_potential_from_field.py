@@ -6,6 +6,11 @@ import scipy.integrate
 import fftcalculus as fc
 import os
 
+def zderiv(arr,z):
+    darr=np.gradient(arr)[0]
+    dz=np.gradient(z)
+    dz=np.atleast_2d(dz).T
+    return darr/dz
 
 Nsource=8
 L=400*1e8
@@ -14,8 +19,8 @@ L=L/Rsun
 
 codedir="/home/jishnu/sparc"
 start_field_dir="/scratch/jishnu/magnetic/start/"
-#~ Bz_start=np.squeeze(pf.getdata(os.path.join(start_field_dir,"B_z2D.fits")))
-#~ Bx_start=np.squeeze(pf.getdata(os.path.join(start_field_dir,"B_x2D.fits")))
+Bz_start=np.squeeze(pf.getdata(os.path.join(start_field_dir,"B_z2D.fits")))
+Bx_start=np.squeeze(pf.getdata(os.path.join(start_field_dir,"B_x2D.fits")))
 
 true_field_dir="/scratch/jishnu/magnetic/true/"
 Bz_true=np.squeeze(pf.getdata(os.path.join(true_field_dir,"B_z2D.fits")))
@@ -26,8 +31,6 @@ area=Nx*Nz
 x=np.linspace(0,L,Nx,endpoint=False)
 z=np.loadtxt(os.path.join(codedir,"polytrope"))[:,0]
 
-
-Bz_start=Bz_true*
 
 int_Bz_start=np.empty_like(Bz_start)
 int_Bz_true=np.empty_like(Bz_true)
@@ -45,18 +48,25 @@ int_Bx_true=int_Bx_true.T
 A_start=int_Bz_start - int_Bx_start
 A_true=int_Bz_true - int_Bx_true
 
+Bz_true_fromA=fc.differentiate(A_true,axis=1,period=L,discontinuity=A_true[:,-1]-A_true[:,0])
+Bx_true_fromA=-zderiv(A_true,z)
+
 z-=1
 yax_ll=z[200]
 yax_ul=None
 inner_cutoff=270
 surf_cutoff=-1
-gridlist=plotc.gridlist(1,2)
+gridlist=plotc.gridlist(2,3)
 
 ploty=z[inner_cutoff:]*Rsun/1e8
 
 dA=A_true-A_start;dA=dA[inner_cutoff:]
 plotc.colorplot(A_start[inner_cutoff:],y=ploty,subplot_index=next(gridlist),title="A start")
 plotc.colorplot(dA,y=ploty,subplot_index=next(gridlist),title="A true - A start")
+plotc.colorplot(Bz_true[inner_cutoff:],y=ploty,subplot_index=next(gridlist),title="Bz true")
+plotc.colorplot(Bz_true_fromA[inner_cutoff:],y=ploty,subplot_index=next(gridlist),title="Bz true from A")
+plotc.colorplot(Bx_true[inner_cutoff:],y=ploty,subplot_index=next(gridlist),title="Bx true")
+plotc.colorplot(Bx_true_fromA[inner_cutoff:],y=ploty,subplot_index=next(gridlist),title="Bx true from A")
 
 plotc.plt.show()
 write_vector_potential=False

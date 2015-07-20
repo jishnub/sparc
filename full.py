@@ -2,8 +2,8 @@ import os,shutil,glob,re,subprocess
 
 env=dict(os.environ, MPI_TYPE_MAX="1280280")
 
-HOME=os.environ['HOME']
-codedir=os.path.join(HOME,"sparc")
+codedir=os.path.dirname(os.path.abspath(__file__))
+HOME=os.environ["HOME"]
 
 configvars={}
 with open(os.path.join(codedir,"varlist.sh")) as myfile:
@@ -49,14 +49,17 @@ def compute_forward_adjoint_kernel(src):
     sparccmd=mpipath+" -np 1 ./sparc "+src+" 00"
     
     def inforward(filename): return os.path.join(data,forward,filename)
+    def inadjoint(filename): return os.path.join(data,adjoint,filename)
+    def inkernel(filename): return os.path.join(data,kernel,filename)
     def indata(filename): return os.path.join(data,filename)
+    def instatus(filename): return os.path.join(data,"status",filename)
     def inttiter(filename): return os.path.join(data,"tt","iter"+itername,filename)
     
     ####################################################################
     #~ Forward
     ####################################################################
     
-    if not os.path.exists(os.path.join(data,"status",forward)):
+    if not os.path.exists(instatus(forward)):
 
         copyfile(Spectral,Instruction)
 
@@ -78,19 +81,19 @@ def compute_forward_adjoint_kernel(src):
     #~ Adjoint
     ####################################################################
 
-    if not os.path.exists(os.path.join(data,"status",adjoint)):
+    if not os.path.exists(instatus(adjoint)):
         copyfile(Adjoint,Instruction)
 
-        with open(os.path.join(data,adjoint,"out_"+adjoint),'w') as outfile:
+        with open(inadjoint("out_"+adjoint),'w') as outfile:
             adj=subprocess.call(sparccmd.split(),stdout=outfile,env=env,cwd=codedir)
             
     ####################################################################
     #~ Kernel
     ####################################################################
 
-    if not os.path.exists(os.path.join(data,"status",kernel+src)):
+    if not os.path.exists(instatus(kernel+src)):
 
-        with open(os.path.join(data,kernel,"out_kernel"+src),'w') as outfile:
+        with open(inkernel("out_kernel"+src),'w') as outfile:
             kern=subprocess.call(sparccmd.split(),stdout=outfile,env=env,cwd=codedir)
     
     return 0

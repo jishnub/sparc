@@ -6,10 +6,12 @@ import os
 
 Rsun=695.8 # Mm
 
-datafile="/scratch/jishnu/magnetic/data/data/01.fits"
+username=os.environ['USER']
+homedir=os.environ['HOME']
+datafile=os.path.join("/scratch",username,"magnetic","data","data","01.fits")
 data=np.squeeze(pyfits.getdata(datafile))
 
-codedir="/home/jishnu/sparc"
+codedir=os.path.join(homedir,"sparc")
 fmode_filter_file=os.path.join(codedir,"fmode_filter.fits")
 pmode_filter_file=os.path.join(codedir,"pmode_filter.fits")
 
